@@ -1,0 +1,2377 @@
+---
+title: "Hilo_STAPH_2024"
+author: "Maria Steadmon"
+date: "02/28/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#libraries
+library(glmmTMB) #negative binomial models
+#effects for models including residuals
+library(performance) #model diagnostics and r.squared calculation
+library(effects) #visualizing model effects
+library(DHARMa) #for checking if data is under dispersed
+library(MuMIn) ##for aic table and r.squared calculation
+library(car) #for lrt comparing bacteria to one another
+#zero-inflated models ? don't think I use this
+#library(pscl)
+#library(lmtest) 
+library(ggplot2) #figures
+library(ggfortify) #figures
+library(ggpubr) #figures
+library(jtools) #figures
+library(ggeffects) #figures, ggpredict
+library(gridExtra) #figures, effects plots
+library(ggbiplot) #figures
+library(plyr) #summary stats
+library(dplyr) #summary stats
+library(factoextra) #figures, PCA plots
+```
+
+# ***Staphylococcus aureus*** **and FIB in Hawaiian Coastal Waters and Sands Analyses**
+
+```{r}
+setwd("/Users/msteadd/Documents/MM_Data_analysis") #set working directory
+dat=read.csv("MM_DATA_HILO.csv", na.strings = ".", header=TRUE) #import .csv
+omit.data=na.omit(dat) #optional dataframe with no NA's
+head(data)
+dat$Location <- factor(dat$Location, levels=c("Honoli'i", "Bayfront", "Reed's Bay", "Puhi Bay","Onekahakaha","Richardson")) #listing sites in order
+dat$Location_1 <- factor(dat$Location_1, levels=c("HL", "BF", "RB", "PB","OK","RN")) #abbreviating sites
+dat$Location=factor(dat$Location)
+```
+
+## **PCA - Principal Component Analyses**
+
+
+#### Water PCA: Salinity, Temperature, Turbidity, DO, Rainfall, Stream Distance, and OSDS density.
+
+
+```{r}
+wPCA_data2_=dat[c("Site",
+                "Location",
+                "Rain_Hilo",
+                "Sal",
+                "Temp",
+                "DO_mg",
+                "Turb","sample",
+                "Stream_Prox_m",
+                "OSDS_1km",
+                "Site_Group")]
+wPCA_data2=na.omit(wPCA_data2_)
+
+water_pca2.1 <- princomp(~
+                  scale(Sal)+
+                  scale(Temp)+
+                  scale(DO_mg)+
+                  scale(Turb)+
+                     scale(Rain_Hilo)+
+                  scale(Stream_Prox_m)+
+                  scale(OSDS_1km),
+                  data=wPCA_data2)
+summary(water_pca2.1)
+
+#visualize
+plot(water_pca2.1)
+plot(water_pca2.1, type="l")
+biplot(water_pca2.1)
+
+#loadings and scores
+loadings(water_pca2.1)
+water_pca2.1$scores
+
+#move scores into a dataframe and combine
+water_pca3<-water_pca2.1$scores
+water_pca_data2<-cbind(water_pca3,wPCA_data2)
+
+#list site and site group are factors
+water_pca_data2$Site_Group=factor(water_pca_data2$Site_Group)
+water_pca_data2$Site=factor(water_pca_data2$Site)
+
+```
+
+```{r}
+wPCA_data2_scale1=wPCA_data2[c("Sal", "Temp","DO_mg","Turb","Rain_Hilo","Stream_Prox_m","OSDS_1km")]
+
+write.csv(wPCA_data2_scale1,file="non-scaled_pca_data.csv")
+wPCA_data2_scale=scale(wPCA_data2_scale)
+write.csv(wPCA_data2_scale,file="scaled_pca_data.csv")
+print(wPCA_data2_scale)
+summary(wPCA_data2_scale)
+
+#When you run this code, you'll see that the scale() function transforms the data such that the mean of each column becomes 0, and the standard deviation becomes 1.
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+PC1_PC2=ggbiplot(water_pca2.1,
+                 choices=c(1,2),var.axes.label = FALSE,
+                 groups=water_pca_data2$Site,shape=water_pca_data2$Site)+
+  ylim(-2,2.5)+xlim(-2,2.5)+
+  theme_bw() + 
+  xlab("PC 1")+ ylab("PC 2")+
+  theme(panel.border = element_blank(),# plot.margin = unit(c(1, 1, 1, 1), "inches"),
+          panel.grid.major = element_blank(),
+          legend.position = "top",
+          panel.grid.minor = element_blank(), 
+          legend.text=element_text(size=10, face="bold"),
+          axis.line = element_line(colour = "black"))
+
+PC1_PC3=ggbiplot(water_pca2.1,
+                 choices=c(1,3),var.axes.label = FALSE,
+                 groups=water_pca_data2$Site)+
+  ylim(-2,2.5)+xlim(-2,2.5)+
+  theme_bw() + 
+  xlab("PC 1")+ ylab("PC 3")+
+  theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          legend.position = "top",
+          panel.grid.minor = element_blank(), 
+          legend.text=element_text(size=10, face="bold"),
+          axis.line = element_line(colour = "black"))
+
+PC1_PC4=ggbiplot(water_pca2.1,
+                 choices=c(1,4),var.axes.label = FALSE,
+                 groups=water_pca_data2$Site)+
+  ylim(-2,2.5)+xlim(-2,2.5)+
+  theme_bw() + 
+  xlab("PC 1")+ ylab("PC 4")+
+  theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          legend.position = "top",
+          panel.grid.minor = element_blank(), 
+          legend.text=element_text(size=10, face="bold"),
+          axis.line = element_line(colour = "black"))
+
+PC1_PC5=ggbiplot(water_pca2.1,
+                 choices=c(1,5),var.axes.label = FALSE,
+                 groups=water_pca_data2$Site)+
+  ylim(-2,2.5)+xlim(-2,2.5)+
+  theme_bw() + 
+  xlab("PC 1")+ ylab("PC 5")+
+  theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          legend.position = "top",
+          panel.grid.minor = element_blank(), 
+          legend.text=element_text(size=10, face="bold"),
+          axis.line = element_line(colour = "black"))
+
+comboplot=ggarrange(PC1_PC2,PC1_PC4,PC1_PC3,PC1_PC5,
+          ncol=2,nrow=2,
+          labels=c("A","C","B","D"),
+          common.legend = T, 
+          heights = c(2,2), 
+          widths = c(2,2))
+PC1_PC2
+#PC1_PC3
+#PC1_PC4
+#PC1_PC5
+```
+
+
+#### Merging data from PCA
+
+
+```{r}
+#water_pca_data2
+merged_data <- dat %>%
+  left_join(water_pca_data2, by = "sample") #%>%
+  #left_join(water_pca_data, by = "sample")  %>%
+  #left_join(sand_pca_data, by = "sample")
+head(merged_data)
+
+#make sure site is a factor
+merged_data$Site.x=as.factor(merged_data$Site.x)
+
+#round all bacteria
+merged_data$Staph_W <- round(merged_data$Staph_W)
+merged_data$MRSA_W <- round(merged_data$MRSA_W)
+merged_data$Ent_W <- round(merged_data$Ent_W)
+merged_data$Cperf_W <- round(merged_data$Cperf_W)
+merged_data$Staph_S <- round(merged_data$Staph_S)
+merged_data$MRSA_S <- round(merged_data$MRSA_S)
+merged_data$Ent_S <- round(merged_data$Ent_S)
+merged_data$Cperf_S <- round(merged_data$Cperf_S)
+```
+
+## **Bacteria Only Models**
+These models focused on determining significant associations between frequently monitored FIB's to S. aureus and MRSA concentrations in seawater and sand.
+
+###Staph in seawater
+
+```{r}
+#Staph and MRSA in seawater
+Staph_W_MRSA_W=merged_data[c("Site.x", "MRSA_W","Staph_W")]#,"Location_1")]
+Staph_W_MRSA_W=na.omit(Staph_W_MRSA_W)
+Staph_W_MRSA_null_=glmmTMB(MRSA_W ~ 1+(1|Site.x), family = nbinom2, data = Staph_W_MRSA_W)
+Staph_W_MRSA_W_mod=glmmTMB(MRSA_W ~ Staph_W+(1|Site.x), 
+                           family = nbinom2, 
+                           data = Staph_W_MRSA_W)
+#summary(Staph_W_MRSA_W_mod)
+#LRT to test significance of predictor
+anova(Staph_W_MRSA_null_,Staph_W_MRSA_W_mod)
+#p = 0.002056, positive relationship
+performance::r2_nakagawa(Staph_W_MRSA_W_mod)
+MuMIn::r.squaredGLMM(Staph_W_MRSA_W_mod)
+#R2c (lognormal conditional pseudo-r^2) = 0.53565615
+
+#Staph and Ent in seawater
+Staph_W_Ent_W=merged_data[c("Site.x", "Staph_W","Ent_W")]#,"Location_1")]
+Staph_W_Ent_W=na.omit(Staph_W_Ent_W)
+Staph_null=glmmTMB(Staph_W ~ 1+(1|Site.x), family = nbinom2, data = Staph_W_Ent_W)
+Staph_Ent_W=glmmTMB(Staph_W ~ Ent_W+(1|Site.x), 
+                    family = nbinom2, 
+                    data = Staph_W_Ent_W)
+anova(Staph_null,Staph_Ent_W)
+#p = 0.2709
+performance::r2_nakagawa(Staph_Ent_W) #checking for issues with model
+
+#Staph and Cperf in seawater
+Staph_W_Cperf_W=merged_data[c("Site.x", "Staph_W","Cperf_W")]#,"Location_1")]
+Staph_W_Cperf_W=na.omit(Staph_W_Cperf_W)
+Staph_null_Cperf=glmmTMB(Staph_W ~ 1+(1|Site.x), family = nbinom2, data = Staph_W_Cperf_W)
+Staph_Cperf_W=glmmTMB(Staph_W ~ Cperf_W+(1|Site.x), 
+                      family = nbinom2, 
+                      data = Staph_W_Cperf_W)
+anova(Staph_null_Cperf,Staph_Cperf_W)
+#p = 0.06192
+performance::r2_nakagawa(Staph_Cperf_W) #checking for issues with model
+
+#Staph W and Staph S
+Staph_S_Staph_W=merged_data[c("Site.x", "Staph_W","Staph_S")]#,"Location_1")]
+Staph_S_Staph_W=na.omit(Staph_S_Staph_W)
+Staph_S_Staph_W_null=glmmTMB(Staph_S ~ 1+(1|Site.x), family = nbinom2, data = Staph_S_Staph_W)
+Staph_S_Staph_W1=glmmTMB(Staph_S ~ Staph_W+(1|Site.x), 
+                         family = nbinom2, 
+                         data = Staph_S_Staph_W)
+anova(Staph_S_Staph_W_null,Staph_S_Staph_W1)
+#p = 5.042e-13, positive relationship 
+r.squaredGLMM(Staph_S_Staph_W1)
+#R2c (lognormal conditional pseudo-r^2) = 0.5165091
+performance::r2_nakagawa(Staph_S_Staph_W1) #checking for issues with model
+
+#staph water, MRSA sand
+MRSA_S_Staph_W=merged_data[c("Site.x", "MRSA_S","Staph_W")]#,"Location_1")]
+MRSA_S_Staph_W=na.omit(MRSA_S_Staph_W)
+MRSA_S_Staph_W_null=glmmTMB(MRSA_S ~ 1+(1|Site.x), family = nbinom2, data = MRSA_S_Staph_W)
+MRSA_S_Staph_W1=glmmTMB(MRSA_S ~ Staph_W+(1|Site.x), 
+                        family = nbinom2, 
+                        data = MRSA_S_Staph_W)
+anova(MRSA_S_Staph_W_null,MRSA_S_Staph_W1)
+#p = 0.071
+performance::r2_nakagawa(MRSA_S_Staph_W1) #checking for issues with model
+
+#Staph water, ENT sand
+Ent_S_Staph_W=merged_data[c("Site.x", "Ent_S","Staph_W")]#,"Location_1")]
+Ent_S_Staph_W=na.omit(Ent_S_Staph_W)
+Ent_S_Staph_W_null=glmmTMB(Ent_S ~ 1+(1|Site.x), family = nbinom2, data = Ent_S_Staph_W)
+Ent_S_Staph_W1=glmmTMB(Ent_S ~ Staph_W+(1|Site.x), 
+                       family = nbinom2, 
+                       data = Ent_S_Staph_W)
+anova(Ent_S_Staph_W_null,Ent_S_Staph_W1)
+#p = 0.0003395, negative relationship
+r.squaredGLMM(Ent_S_Staph_W1)
+#R2c (lognormal conditional pseudo-r^2) = 0.6909282
+performance::r2_nakagawa(Ent_S_Staph_W1) #checking for issues with model
+
+#Staph water, Cperf sand
+Cperf_S_Staph_W=merged_data[c("Site.x", "Cperf_S","Staph_W")]#,"Location_1")]
+Cperf_S_Staph_W=na.omit(Cperf_S_Staph_W)
+Cperf_S_Staph_W_null=glmmTMB(Cperf_S ~ 1+(1|Site.x), family = nbinom2, data = Cperf_S_Staph_W)
+Cperf_S_Staph_W1=glmmTMB(Cperf_S ~ Staph_W+(1|Site.x), 
+                         family = nbinom2, 
+                         data = Cperf_S_Staph_W)
+anova(Cperf_S_Staph_W_null,Cperf_S_Staph_W1)
+#p = 0.9271
+performance::r2_nakagawa(Cperf_S_Staph_W1) #checking for issues with model
+```
+
+###MRSA in seawater
+```{r}
+#MRSA and Ent in seawater
+MRSA_W_Ent_W=merged_data[c("Site.x", "MRSA_W","Ent_W")]#,"Location_1")]
+MRSA_W_Ent_W=na.omit(MRSA_W_Ent_W)
+MRSA_null_Ent_W=glmmTMB(MRSA_W ~ 1+(1|Site.x), family = nbinom2, data = MRSA_W_Ent_W)
+MRSA_Ent_W=glmmTMB(MRSA_W ~ Ent_W+(1|Site.x), 
+                   family = nbinom2, 
+                   data = MRSA_W_Ent_W)
+anova(MRSA_null_Ent_W,MRSA_Ent_W)
+#p = 0.04111, positive relationship 
+r.squaredGLMM(MRSA_Ent_W)
+#R2c (lognormal conditional pseudo-r^2) = 0.4058603
+performance::r2_nakagawa(MRSA_Ent_W) #checking for issues with model
+
+#MRSA and Cperf in seawater
+MRSA_W_Cperf_W=merged_data[c("Site.x", "MRSA_W","Cperf_W")]#,"Location_1")]
+MRSA_W_Cperf_W=na.omit(MRSA_W_Cperf_W)
+MRSA_null_Cperf_W=glmmTMB(MRSA_W ~ 1+(1|Site.x), family = nbinom2, data = MRSA_W_Cperf_W)
+MRSA_Cperf_W=glmmTMB(MRSA_W ~ Cperf_W+(1|Site.x),
+                     family = nbinom2, 
+                     data = MRSA_W_Cperf_W)
+anova(MRSA_null_Cperf_W,MRSA_Cperf_W)
+#p = 0.08442
+performance::r2_nakagawa(MRSA_Cperf_W) #checking for issues with model
+
+#MRSA W and MRSA S
+MRSA_S_MRSA_W=merged_data[c("Site.x", "MRSA_W","MRSA_S")]#,"Location_1")]
+MRSA_S_MRSA_W=na.omit(MRSA_S_MRSA_W)
+MRSA_S_null_MRSA_W=glmmTMB(MRSA_S ~ 1+(1|Site.x), family = nbinom2, data = MRSA_S_MRSA_W)
+MRSA_S_MRSA_W1=glmmTMB(MRSA_S ~ MRSA_W+(1|Site.x), 
+                      family = nbinom2, 
+                      data = MRSA_S_MRSA_W)
+anova(MRSA_S_null_MRSA_W,MRSA_S_MRSA_W1)
+#p = 0.966
+performance::r2_nakagawa(MRSA_S_MRSA_W1) #checking for issues with model
+
+#MRSA water, staph sand
+Staph_S_MRSA_W=merged_data[c("Site.x", "Staph_S","MRSA_W")]#,"Location_1")]
+Staph_S_MRSA_W=na.omit(Staph_S_MRSA_W)
+Staph_S_MRSA_W_null=glmmTMB(Staph_S ~ 1+(1|Site.x), family = nbinom2, data = Staph_S_MRSA_W)
+Staph_S_MRSA_W1=glmmTMB(Staph_S ~ MRSA_W+(1|Site.x), 
+                        family = nbinom2, 
+                        data = Staph_S_MRSA_W)
+anova(Staph_S_MRSA_W_null,Staph_S_MRSA_W1)
+#p=0.0001122, negative relationship
+r.squaredGLMM(Staph_S_MRSA_W1)
+#R2c (lognormal conditional pseudo-r^2) = 0.7548330
+performance::r2_nakagawa(Staph_S_MRSA_W1) #checking for issues with model
+
+#MRSA water, ENT sand
+Ent_S_MRSA_W=merged_data[c("Site.x", "Ent_S","MRSA_W")]#,"Location_1")]
+Ent_S_MRSA_W=na.omit(Ent_S_MRSA_W)
+Ent_S_MRSA_W_null=glmmTMB(Ent_S ~ 1+(1|Site.x), family = nbinom2, data = Ent_S_MRSA_W)
+Ent_S_MRSA_W1=glmmTMB(Ent_S ~ MRSA_W+(1|Site.x), 
+                      family = nbinom2, 
+                      data = Ent_S_MRSA_W)
+anova(Ent_S_MRSA_W_null,Ent_S_MRSA_W1)
+#p=0.03603, negative relationship
+r.squaredGLMM(Ent_S_MRSA_W1)
+#R2c (lognormal conditional pseudo-r^2) = 0.6330416
+performance::r2_nakagawa(Ent_S_MRSA_W1) #checking for issues with model
+
+
+#MRSA water, Cperf sand
+Cperf_S_MRSA_W=merged_data[c("Site.x", "Cperf_S","MRSA_W")]#,"Location_1")]
+Cperf_S_MRSA_W=na.omit(Cperf_S_MRSA_W)
+Cperf_S_MRSA_W_null=glmmTMB(Cperf_S ~ 1+(1|Site.x), family = nbinom2, data = Cperf_S_MRSA_W)
+Cperf_S_MRSA_W1=glmmTMB(Cperf_S ~ MRSA_W+(1|Site.x), 
+                        family = nbinom2, 
+                        data = Cperf_S_MRSA_W)
+anova(Cperf_S_MRSA_W_null,Cperf_S_MRSA_W1)
+#p = 0.05514
+performance::r2_nakagawa(Cperf_S_MRSA_W1) #checking for issues with model
+
+```
+
+###Ent in seawater
+```{r}
+#Ent
+#null Ent model
+Ent_W_Cperf_W=merged_data[c("Site.x", "Ent_W","Cperf_W")]#,"Location_1")]
+Ent_W_Cperf_W=na.omit(Ent_W_Cperf_W)
+Ent_null_Cperf=glmmTMB(Ent_W ~ 1+(1|Site.x), family = nbinom2, data = Ent_W_Cperf_W)
+Ent_Cperf_W=glmmTMB(Ent_W ~ Cperf_W+(1|Site.x), 
+                    family = nbinom2, 
+                    data = Ent_W_Cperf_W)
+anova(Ent_null_Cperf,Ent_Cperf_W)
+#p = 0.0004132, positive relationship
+r.squaredGLMM(Ent_Cperf_W)
+#R2c (lognormal conditional pseudo-r^2) = 0.4813039
+performance::r2_nakagawa(Ent_Cperf_W) #checking for issues with model
+
+#Ent W and Ent S
+Ent_S_Ent_W=merged_data[c("Site.x", "Ent_S","Ent_W")]#,"Location_1")]
+Ent_S_Ent_W=na.omit(Ent_S_Ent_W)
+Ent_S_Ent_W_null=glmmTMB(Ent_S~1 +(1|Site.x),family=nbinom2, data = Ent_S_Ent_W)
+Ent_S_Ent_W1=glmmTMB(Ent_S ~ Ent_W+(1|Site.x), 
+                     family = nbinom2, 
+                     data = Ent_S_Ent_W)
+anova(Ent_S_Ent_W_null,Ent_S_Ent_W1)
+#p = 0.009705, positive relationship
+r.squaredGLMM(Ent_S_Ent_W1)
+#R2c (lognormal conditional pseudo-r^2) = 0.7309824
+performance::r2_nakagawa(Ent_S_Ent_W1) #checking for issues with model
+
+#ENT water, Staph sand
+Staph_S_Ent_W=merged_data[c("Site.x", "Staph_S","Ent_W")]#,"Location_1")]
+Staph_S_Ent_W=na.omit(Staph_S_Ent_W)
+Staph_S_Ent_W_null=glmmTMB(Staph_S ~ 1+(1|Site.x), family = nbinom2, data = Staph_S_Ent_W)
+Staph_S_Ent_W1=glmmTMB(Staph_S ~ Ent_W+(1|Site.x), 
+                       family = nbinom2, 
+                       data = Staph_S_Ent_W)
+anova(Staph_S_Ent_W_null,Staph_S_Ent_W1)
+#p = 0.01139, negative relationship
+r.squaredGLMM(Staph_S_Ent_W1)
+#R2c (lognormal conditional pseudo-r^2) = 0.6382818
+performance::r2_nakagawa(Staph_S_Ent_W1) #checking for issues with model
+
+#Ent water, MRSA sand
+MRSA_S_Ent_W=merged_data[c("Site.x", "MRSA_S","Ent_W")]#,"Location_1")]
+MRSA_S_Ent_W=na.omit(MRSA_S_Ent_W)
+MRSA_S_Ent_W_null=glmmTMB(MRSA_S ~ 1+(1|Site.x), family = nbinom2, data = MRSA_S_Ent_W)
+MRSA_S_Ent_W1=glmmTMB(MRSA_S ~ Ent_W+(1|Site.x),
+                      family = nbinom2, 
+                      data = MRSA_S_Ent_W)
+anova(MRSA_S_Ent_W_null,MRSA_S_Ent_W1)
+#p = 0.05649
+performance::r2_nakagawa(MRSA_S_Ent_W1) #checking for issues with model
+
+#Ent water, Cperf sand
+Cperf_S_Ent_W=merged_data[c("Site.x", "Cperf_S","Ent_W")]#,"Location_1")]
+Cperf_S_Ent_W=na.omit(Cperf_S_Ent_W)
+Cperf_S_Ent_W_null=glmmTMB(Cperf_S ~ 1+(1|Site.x), family = nbinom2, data = Cperf_S_Ent_W)
+Cperf_S_Ent_W1=glmmTMB(Cperf_S ~ Ent_W+(1|Site.x), 
+                       family = nbinom2, 
+                       data = Cperf_S_Ent_W)
+anova(Cperf_S_Ent_W_null,Cperf_S_Ent_W1)
+#p = 0.949
+performance::r2_nakagawa(Cperf_S_Ent_W1) #checking for issues with model
+
+```
+
+###Cperf in seawater
+```{r}
+#Cperf W and Cperf S
+Cperf_W_Cperf_S=merged_data[c("Site.x", "Cperf_W","Cperf_S")]#,"Location_1")]
+Cperf_W_Cperf_S=na.omit(Cperf_W_Cperf_S)
+Cperf_S_null=glmmTMB(Cperf_S ~ 1+(1|Site.x), family = nbinom2, data = Cperf_W_Cperf_S)
+Cperf_S_Cperf_W=glmmTMB(Cperf_S ~ Cperf_W+(1|Site.x), 
+                        family = nbinom2, 
+                        data = Cperf_W_Cperf_S)
+anova(Cperf_S_null,Cperf_S_Cperf_W)
+#p = 0.2998
+performance::r2_nakagawa(Cperf_S_Cperf_W) #checking for issues with model
+
+#Cperf water, Staph sand
+Staph_S_Cperf_W=merged_data[c("Site.x", "Staph_S","Cperf_W")]#,"Location_1")]
+Staph_S_Cperf_W=na.omit(Staph_S_Cperf_W)
+Staph_S_Cperf_W_null=glmmTMB(Staph_S ~ 1+(1|Site.x), family = nbinom2, data = Staph_S_Cperf_W)
+Staph_S_Cperf_W1=glmmTMB(Staph_S ~ Cperf_W+(1|Site.x), 
+                         family = nbinom2, 
+                         data = Staph_S_Cperf_W)
+anova(Staph_S_Cperf_W_null,Staph_S_Cperf_W1)
+#p = 0.7946
+performance::r2_nakagawa(Staph_S_Cperf_W1) #checking for issues with model
+
+
+#Cperf water, MRSA sand
+MRSA_S_Cperf_W=merged_data[c("Site.x", "MRSA_S","Cperf_W")]#,"Location_1")]
+MRSA_S_Cperf_W=na.omit(MRSA_S_Cperf_W)
+MRSA_S_Cperf_W_null=glmmTMB(MRSA_S ~ 1+(1|Site.x), family = nbinom2, data = MRSA_S_Cperf_W)
+MRSA_S_Cperf_W1=glmmTMB(MRSA_S ~ Cperf_W+(1|Site.x), 
+                        family = nbinom2, 
+                        data = MRSA_S_Cperf_W)
+anova(MRSA_S_Cperf_W_null,MRSA_S_Cperf_W1)
+#p = 0.5909
+performance::r2_nakagawa(MRSA_S_Cperf_W1) #checking for issues with model
+
+#Cperf water, Ent sand
+Ent_S_Cperf_W=merged_data[c("Site.x", "Ent_S","Cperf_W")]#,"Location_1")]
+Ent_S_Cperf_W=na.omit(Ent_S_Cperf_W)
+Ent_S_Cperf_W_null=glmmTMB(Ent_S ~ 1+(1|Site.x), family = nbinom2, data = Ent_S_Cperf_W)
+Ent_S_Cperf_W1=glmmTMB(Ent_S ~ Cperf_W+(1|Site.x), 
+                       family = nbinom2, 
+                       data = Ent_S_Cperf_W)
+anova(Ent_S_Cperf_W_null,Ent_S_Cperf_W1)
+#p = 0.02991, posiitve relationship
+r.squaredGLMM(Ent_S_Cperf_W1)
+#R2c (lognormal conditional pseudo-r^2) = 0.6461608
+performance::r2_nakagawa(Ent_S_Cperf_W1) #checking for issues with model
+```
+
+
+###Staph in sand
+```{r}
+#Staph S and MRSA S
+MRSA_S_Staph_S=merged_data[c("Site.x", "Staph_S","MRSA_S")]#,"Location_1")]
+MRSA_S_Staph_S=na.omit(MRSA_S_Staph_S)
+MRSA_S_null_Staph_S=glmmTMB(MRSA_S ~ 1+(1|Site.x), family = nbinom2, data = MRSA_S_Staph_S)
+MRSA_Staph_S=glmmTMB(MRSA_S ~ Staph_S+(1|Site.x), 
+                     family = nbinom2, 
+                     data = MRSA_S_Staph_S)
+anova(MRSA_S_null_Staph_S,MRSA_Staph_S)
+#p = 0.1426
+performance::r2_nakagawa(MRSA_Staph_S) #checking for issues with model
+
+#Staph S and Ent S
+Staph_S_Ent_S=merged_data[c("Site.x", "Ent_S","Staph_S")]#,"Location_1")]
+Staph_S_Ent_S=na.omit(Staph_S_Ent_S)
+Staph_Ent_S_null=glmmTMB(Staph_S ~ 1+(1|Site.x), family = nbinom2, data = Staph_S_Ent_S)
+Staph_Ent_S=glmmTMB(Staph_S ~ Ent_S+(1|Site.x),
+                    family = nbinom2, 
+                    data = Staph_S_Ent_S)
+anova(Staph_Ent_S_null,Staph_Ent_S)
+# p = 0.03468, negative relationship
+r.squaredGLMM(Staph_Ent_S)
+#R2c (lognormal conditional pseudo-r^2) = 0.5917997
+performance::r2_nakagawa(Staph_Ent_S) #checking for issues with model
+
+#Staph S and Cperf S
+Staph_S_Cperf_S=merged_data[c("Site.x", "Cperf_S","Staph_S")]#,"Location_1")]
+Staph_S_Cperf_S=na.omit(Staph_S_Cperf_S)
+Staph_Cperf_S_null=glmmTMB(Staph_S ~ 1+(1|Site.x), family = nbinom2, data = Staph_S_Cperf_S)
+Staph_Cperf_S=glmmTMB(Staph_S ~ Cperf_S+(1|Site.x), 
+                      family = nbinom2, 
+                      data = Staph_S_Cperf_S)
+anova(Staph_Cperf_S_null,Staph_Cperf_S)
+#p = 0.7901
+performance::r2_nakagawa(Staph_Cperf_S) #checking for issues with model
+```
+
+###MRSA in sand
+```{r}
+#MRSA S and Ent S
+MRSA_S_Ent_S=merged_data[c("Site.x", "Ent_S","MRSA_S")]#,"Location_1")]
+MRSA_S_Ent_S=na.omit(MRSA_S_Ent_S)
+MRSA_S_null_Ent_S=glmmTMB(MRSA_S ~ 1+(1|Site.x), family = nbinom2, data = MRSA_S_Ent_S)
+MRSA_Ent_S=glmmTMB(MRSA_S ~ Ent_S+(1|Site.x), 
+                   family = nbinom2, 
+                   data = MRSA_S_Ent_S)
+anova(MRSA_S_null_Ent_S,MRSA_Ent_S)
+#p = 0.6749
+performance::r2_nakagawa(MRSA_Ent_S) #checking for issues with model
+
+#MRSA S and Cperf S
+MRSA_S_Cperf_S=merged_data[c("Site.x", "Cperf_S","MRSA_S")]#,"Location_1")]
+MRSA_S_Cperf_S=na.omit(MRSA_S_Cperf_S)
+MRSA_S_null_Cperf_S=glmmTMB(MRSA_S ~ 1+(1|Site.x), family = nbinom2, data = MRSA_S_Cperf_S)
+MRSA_Cperf_S=glmmTMB(MRSA_S ~ Cperf_S+(1|Site.x), 
+                     family = nbinom2, 
+                     data = MRSA_S_Cperf_S)
+anova(MRSA_S_null_Cperf_S,MRSA_Cperf_S)
+#p = 0.3973
+performance::r2_nakagawa(MRSA_Cperf_S) #checking for issues with model
+```
+
+###Ent in Sand
+```{r}
+#Ent S and Cperf S
+Ent_S_Cperf_S=merged_data[c("Site.x", "Ent_S","Cperf_S")]#,"Location_1")]
+Ent_S_Cperf_S=na.omit(Ent_S_Cperf_S)
+Ent_S_Cperf_S_null=glmmTMB(Ent_S~1 +(1|Site.x),family=nbinom2, data = Ent_S_Cperf_S)
+Ent_Cperf_S=glmmTMB(Ent_S ~ Cperf_S+(1|Site.x), family = nbinom2, data = Ent_S_Cperf_S)
+anova(Ent_S_Cperf_S_null,Ent_Cperf_S)
+#p = 0.6199
+performance::r2_nakagawa(Ent_Cperf_S) #checking for issues with model
+```
+
+
+## **Environmental Models**
+
+#### Models for seawater concentrations 
+
+##### Models for Staphylococcus aureus in seawater
+
+```{r}
+#Subset model data for staph
+Staph_W_mod_data1=
+  merged_data[c("Site.x", "Location.x","Staph_W","Comp.1","Comp.2","Water_Level")]
+
+#remove na
+Staph_W_mod_data=na.omit(Staph_W_mod_data1)
+
+#model with only environmental data - testing impact of only environmental variables
+mod_Staph_full=glmmTMB(Staph_W ~ Comp.1 + Comp.2 +
+                                Water_Level+
+                                (1|Site.x), 
+                             ziformula = ~ 1, #for zero-inflatation
+                             #  dispformula = ~1, #not over-dispersed
+                              family = nbinom2, data = Staph_W_mod_data)
+summary(mod_Staph_full)
+#testDispersion(mod_Staph_full, alternative="less")
+#Dispersion ratios larger than one indicate overdispersion, thus a
+#' negative binomial model or similar might fit better to the data. A p-value <.05 indicates overdispersion. Hence why a negative binomial is used
+performance::check_overdispersion(mod_Staph_full) #overdispersed
+performance::check_zeroinflation(mod_Staph_full) #zero-inflated
+performance::check_collinearity(mod_Staph_full) #low correlation
+#@return `TRUE` if convergence is fine and `FALSE` if convergence
+#'   is suspicious. Additionally, the convergence value is returned as attribute.
+performance::check_convergence(mod_Staph_full) #convergence is fine
+#`TRUE` if the model fit is singular. FALSE if model is fine
+performance::check_singularity(mod_Staph_full) #does not suffer from singularity
+
+#checking significance of random effect
+mod_Staph_full_nord=glmmTMB(Staph_W ~ Comp.1 + Comp.2 +
+                                Water_Level,#+
+                               # (1|Site.x), 
+                             ziformula = ~ 1, #for zero-inflatation
+                             #  dispformula = ~1, #not over-dispersed
+                              family = nbinom2, data = Staph_W_mod_data)
+anova(mod_Staph_full_nord,mod_Staph_full) #it is significant
+
+#model with only environmental data no PC1
+mod_Staph_noPC1=glmmTMB(Staph_W ~  Comp.2 + 
+                                      Water_Level+(1|Site.x), 
+                                     ziformula = ~ 1,
+                                    family = nbinom2, data = Staph_W_mod_data)
+summary(mod_Staph_noPC1)
+#testDispersion(mod_Staph_noPC1, alternative="less")
+performance::check_zeroinflation(mod_Staph_noPC1) #zero-inflated
+
+#model with only environmental data no PC2
+mod_Staph_noPC2=glmmTMB(Staph_W ~ Comp.1 + 
+                                      Water_Level+(1|Site.x), 
+                                     ziformula = ~ 1, #not significant
+                                    family = nbinom2, 
+                                  data = Staph_W_mod_data)
+summary(mod_Staph_noPC2)
+#testDispersion(mod_Staph_noPC2, alternative="less")
+performance::check_zeroinflation(mod_Staph_noPC2) #not zero-inflated
+
+#model with only environmental data but excluding water level
+mod_Staph_noWL=glmmTMB(Staph_W ~ Comp.1 + Comp.2 +
+                                     (1|Site.x), 
+                                   ziformula = ~ 1,
+                                   family = nbinom2, 
+                                   data = Staph_W_mod_data)
+summary(mod_Staph_noWL)
+#testDispersion(mod_Staph_noWL, alternative="less")
+performance::check_zeroinflation(mod_Staph_noWL) #zero-inflated
+
+#model with only comp.1 
+mod_Staph_PC1_only=glmmTMB(Staph_W ~ Comp.1 + 
+                                  (1|Site.x), 
+                            ziformula = ~ 1, #not significant
+                              family = nbinom2, 
+                           data = Staph_W_mod_data)
+summary(mod_Staph_PC1_only)
+#testDispersion(mod_Staph_PC1_only, alternative="less")
+performance::check_zeroinflation(mod_Staph_PC1_only) #not zero-inflated
+
+#model with only comp.2
+mod_Staph_PC2_only=glmmTMB(Staph_W ~ 
+                                   Comp.2 +
+                                  (1|Site.x), 
+                                  ziformula = ~ 1,
+                              family = nbinom2, 
+                           data = Staph_W_mod_data)
+summary(mod_Staph_PC2_only)
+#testDispersion(mod_Staph_PC2_only, alternative="less")
+performance::check_zeroinflation(mod_Staph_PC2_only) #zero-inflated
+
+#model with only water level
+mod_Staph_WL_only=glmmTMB(Staph_W ~ 
+                                Water_Level+
+                              (1|Site.x), 
+                              ziformula = ~ 1, #marginally insignificant
+                              family = nbinom2, 
+                          data = Staph_W_mod_data)
+summary(mod_Staph_WL_only)
+#testDispersion(mod_Staph_WL_only, alternative="less")
+performance::check_zeroinflation(mod_Staph_WL_only) #zero-inflated
+
+#null model (intercept only model)
+mod_Staph_intercept=glmmTMB(Staph_W ~ 1 +(1|Site.x), 
+                            family = nbinom2, 
+                            data = Staph_W_mod_data)
+
+staph_W_models1=list(
+                    mod_Staph_full,#1     PC1, PC2, WL 
+                    mod_Staph_noPC1,#2    PC2, WL
+                    mod_Staph_noPC2,#3    PC1,  WL
+                    mod_Staph_noWL, #4    PC1, PC2
+                    mod_Staph_PC1_only, #5  Comp.1 only
+                    mod_Staph_PC2_only, #6  Comp.2 only
+                    mod_Staph_WL_only, #7   Water Level
+                    mod_Staph_intercept) #8   intercept
+
+staph_w_pca_models = model.sel(staph_W_models1)
+staph_w_pca_models
+
+#pseudo-r^2 calculations ranked in order based upon model.sel()
+performance::r2_nakagawa(mod_Staph_full) #1
+performance::r2_nakagawa(mod_Staph_noWL) #4
+performance::r2_nakagawa(mod_Staph_noPC1) #2
+performance::r2_nakagawa(mod_Staph_PC2_only) #6
+performance::r2_nakagawa(mod_Staph_PC1_only) #5
+performance::r2_nakagawa(mod_Staph_noPC2) #3
+performance::r2_nakagawa(mod_Staph_intercept) #8
+performance::r2_nakagawa(mod_Staph_WL_only) #7
+
+performance::r2_zeroinflated(mod_Staph_full) #1
+
+library(pscl)  # Load the pscl package for the zeroinfl function
+
+# Fit a zero-inflated negative binomial model with a random effect
+model_zeroinfl <- zeroinfl(Staph_W ~ Comp.1 + Comp.2+ Water_Level | Site.x, data = Staph_W_mod_data, dist = "negbin")
+
+# Summary of the model
+summary(model_zeroinfl)
+performance::r2_zeroinflated(model_zeroinfl) #1
+
+```
+ 
+##### Models for MRSA in seawater
+
+```{r}
+#Subset model data for staph
+MRSA_W_mod_data1=
+  merged_data[c("Site.x", "Location.x","MRSA_W","Comp.1","Comp.2","Water_Level")]
+
+#remove na
+MRSA_W_mod_data=na.omit(MRSA_W_mod_data1)
+
+#model with only environmental variables
+mod_MRSA_full=glmmTMB(MRSA_W ~ Comp.1 + Comp.2 + 
+                               Water_Level+
+                               (1|Site.x), 
+                       ziformula = ~ 1, #for zero-inflatation
+                             #  dispformula = ~1, #not over-dispersed
+                             family = nbinom2, 
+                             data = MRSA_W_mod_data)
+summary(mod_MRSA_full)
+#testDispersion(mod_MRSA_full, alternative="less")
+#performance::check_overdispersion(mod_MRSA_full) #not overdispersed
+performance::check_zeroinflation(mod_MRSA_full) #zero-inflated
+performance::check_collinearity(mod_MRSA_full) #low correlation
+performance::check_convergence(mod_MRSA_full) #no convergence
+performance::check_singularity(mod_MRSA_full) #no singularity
+
+#model with only environmental variables no Comp1
+mod_MRSA_noPC1=glmmTMB(MRSA_W ~  Comp.2 + 
+                                     Water_Level+(1|Site.x), 
+                                    ziformula = ~ 1, #for zero-inflation
+                                   family = nbinom2, 
+                                   data = MRSA_W_mod_data)
+summary(mod_MRSA_noPC1)
+#testDispersion(mod_MRSA_noPC1, alternative="less")
+performance::check_zeroinflation(mod_MRSA_noPC1) #zero-inflated
+
+#model with only environmental variables no Comp2
+mod_MRSA_noPC2=glmmTMB(MRSA_W ~ Comp.1 +  
+                                     Water_Level+
+                                     (1|Site.x), 
+                                  ziformula = ~ 1, #for zero-inflatation
+                                   family = nbinom2, 
+                                   data = MRSA_W_mod_data)
+summary(mod_MRSA_noPC2)
+#testDispersion(mod_MRSA_noPC2, alternative="less")
+performance::check_zeroinflation(mod_MRSA_noPC2) #zero-inflated
+
+#model with only environmental variables excluding water level
+mod_MRSA_noWL=glmmTMB(MRSA_W ~ Comp.1 + Comp.2 + 
+                                    (1|Site.x), 
+                                  ziformula = ~ 1, #for zero-inflatation
+                                  family = nbinom2, 
+                                    data = MRSA_W_mod_data)
+summary(mod_MRSA_noWL)
+#testDispersion(mod_MRSA_noWL, alternative="less")
+performance::check_zeroinflation(mod_MRSA_noWL) #zero-inflated
+
+#Comp.1 only
+mod_MRSA_PC1_only=glmmTMB(MRSA_W ~ Comp.1+
+                                 (1|Site.x),
+                                ziformula = ~ 1, #for zero-inflatation
+                                 family = nbinom2, 
+                                 data = MRSA_W_mod_data)
+summary(mod_MRSA_PC1_only)
+#testDispersion(mod_MRSA_PC1_only, alternative="less")
+performance::check_zeroinflation(mod_MRSA_PC1_only) #zero-inflated
+
+#Comp.2 only
+mod_MRSA_PC2_only=glmmTMB(MRSA_W ~ Comp.2+
+                                 (1|Site.x), 
+                               ziformula = ~ 1, #for zero-inflatation
+                                 family = nbinom2, 
+                                 data = MRSA_W_mod_data)
+summary(mod_MRSA_PC2_only)
+#testDispersion(mod_MRSA_PC2_only, alternative="less")
+performance::check_zeroinflation(mod_MRSA_PC2_only) #zero-inflated
+
+#WL only
+mod_MRSA_WL_only=glmmTMB(MRSA_W ~ Water_Level+
+                                 (1|Site.x), 
+                              ziformula = ~ 1, #for zero-inflatation
+                             family = nbinom2, 
+                             data = MRSA_W_mod_data)
+summary(mod_MRSA_WL_only)
+#testDispersion(mod_MRSA_WL_only, alternative="less")
+performance::check_zeroinflation(mod_MRSA_WL_only) #zero-inflated
+
+#null model (intercept only model)
+mod_MRSA_intercept=glmmTMB(MRSA_W ~ 1+(1|Site.x),
+                               family = nbinom2, 
+                               data = MRSA_W_mod_data)
+
+MRSA_W_models1=list(
+                    mod_MRSA_full, #1 PC1, PC2, WL
+                    mod_MRSA_noPC1, #2   PC2, WL
+                    mod_MRSA_noPC2, #3  PC1,  WL
+                    mod_MRSA_noWL, #4  PC1, PC2
+                    mod_MRSA_PC1_only, #5
+                    mod_MRSA_PC2_only, #6
+                    mod_MRSA_WL_only, #7
+                    mod_MRSA_intercept) #8
+
+MRSA_w_pca_models = model.sel(MRSA_W_models1)
+MRSA_w_pca_models
+
+#pseudo-r^2 calculations ranked in order based upon model.sel()
+performance::r2_nakagawa(mod_MRSA_PC2_only) #6
+performance::r2_nakagawa(mod_MRSA_noWL) #4
+performance::r2_nakagawa(mod_MRSA_noPC1) #2
+performance::r2_nakagawa(mod_MRSA_full) #1
+performance::r2_nakagawa(mod_MRSA_PC1_only) #5
+performance::r2_nakagawa(mod_MRSA_WL_only) #7
+performance::r2_nakagawa(mod_MRSA_noPC2) #3
+performance::r2_nakagawa(mod_MRSA_intercept) #8
+```
+
+
+##### Models for Enterococcus spp. in seawater
+
+```{r}
+#Subset model data for staph
+Ent_W_mod_data1=
+  merged_data[c("Site.x", "Location.x","Ent_W","Comp.1","Comp.2","Water_Level")]
+
+#remove na
+Ent_W_mod_data=na.omit(Ent_W_mod_data1)
+
+#EM only model
+mod_Ent_full=glmmTMB(Ent_W ~ Comp.1 + Comp.2 +
+                                    Water_Level+(1|Site.x), 
+                                 # ziformula = ~ 1, #for zero-inflatation
+                                 # dispformula = ~1, 
+                                  family = nbinom2, 
+                                  data = Ent_W_mod_data)
+summary(mod_Ent_full)
+#testDispersion(mod_Ent_full, alternative="less")
+performance::check_overdispersion(mod_Ent_full) #overdispersed so negbin
+#performance::check_zeroinflation(mod_Ent_full) #no non-zero values
+performance::check_collinearity(mod_Ent_full) #low correlation
+performance::check_convergence(mod_Ent_full) #no convergence
+performance::check_singularity(mod_Ent_full) #no singularity
+
+#significance of random effect (1|Site)
+mod_Ent_full_nord=glmmTMB(Ent_W ~ Comp.1 + Comp.2 +
+                                    Water_Level,#+(1|Site.x), 
+                                 # ziformula = ~ 1, #for zero-inflatation
+                                 # dispformula = ~1, 
+                                  family = nbinom2, 
+                                  data = Ent_W_mod_data)
+anova(mod_Ent_full_nord,mod_Ent_full) #random effect is significant
+
+#model with EM only no Comp. 1
+mod_Ent_noPC1=glmmTMB(Ent_W ~  Comp.2 + 
+                                    Water_Level+(1|Site.x), 
+                                 # ziformula = ~ 1, #for zero-inflatation
+                                  family = nbinom2, 
+                                  data = Ent_W_mod_data)
+summary(mod_Ent_noPC1)
+#testDispersion(mod_Ent_full, alternative="less")
+
+#model with EM only no Comp. 2
+mod_Ent_noPC2=glmmTMB(Ent_W ~ Comp.1 + 
+                                    Water_Level+(1|Site.x), 
+                                 # ziformula = ~ 1, #for zero-inflatation
+                                  family = nbinom2, 
+                                  data = Ent_W_mod_data)
+summary(mod_Ent_noPC2)
+#testDispersion(mod_Ent_noPC2, alternative="less")
+
+#model with Em only no water level
+mod_Ent_noWL=glmmTMB(Ent_W ~ Comp.1 + Comp.2 + 
+                                   (1|Site.x), 
+                                 #ziformula = ~ 1, #for zero-inflatation
+                                 family = nbinom2, 
+                                 data = Ent_W_mod_data)
+summary(mod_Ent_noWL)
+#testDispersion(mod_Ent_noWL, alternative="less")
+
+#Comp.1 only model
+mod_Ent_PC1_only=glmmTMB(Ent_W ~ Comp.1+(1|Site.x), 
+                               # ziformula = ~ 1, #for zero-inflatation
+                                family = nbinom2, 
+                                data = Ent_W_mod_data)
+summary(mod_Ent_PC1_only)
+#testDispersion(mod_Ent_PC1_only, alternative="less")
+
+#Comp.2 only model
+mod_Ent_PC2_only=glmmTMB(Ent_W ~ Comp.2+(1|Site.x), 
+                               # ziformula = ~ 1, #for zero-inflatation
+                                family = nbinom2, 
+                                data = Ent_W_mod_data)
+summary(mod_Ent_PC2_only)
+#testDispersion(mod_Ent_PC2_only, alternative="less")
+
+#TH only model
+mod_Ent_WL_only=glmmTMB(Ent_W ~ Water_Level+(1|Site.x), 
+                           # ziformula = ~ 1, #for zero-inflatation
+                            family = nbinom2, 
+                            data = Ent_W_mod_data)
+summary(mod_Ent_WL_only)
+#testDispersion(mod_Ent_WL_only, alternative="less")
+
+#intercept only model
+mod_Ent_intercept=glmmTMB(Ent_W ~ 1+(1|Site.x), 
+                              family = nbinom2, 
+                              data = Ent_W_mod_data)
+
+
+Ent_W_models1=list(
+                    mod_Ent_full, #1 PC1, PC2, WL
+                    mod_Ent_noPC1, #2 PC2, WL
+                    mod_Ent_noPC2, #3 PC1, WL
+                    mod_Ent_noWL, #4 PC1, PC2
+                    mod_Ent_PC1_only, #5
+                    mod_Ent_PC2_only, #6
+                    mod_Ent_WL_only, #7
+                    mod_Ent_intercept) #8
+
+#plot(allEffects(mod_Ent_pca))
+Ent_w_pca_models = model.sel(Ent_W_models1)
+Ent_w_pca_models
+
+#pseudo-r^2 calculations ranked in order based upon model.sel()
+performance::r2_nakagawa(mod_Ent_full)#1
+performance::r2_nakagawa(mod_Ent_noPC1)#2
+performance::r2_nakagawa(mod_Ent_noWL)#4
+performance::r2_nakagawa(mod_Ent_WL_only)#7
+performance::r2_nakagawa(mod_Ent_PC2_only) #6
+performance::r2_nakagawa(mod_Ent_noPC2) #3
+performance::r2_nakagawa(mod_Ent_intercept)#8
+performance::r2_nakagawa(mod_Ent_PC1_only) #5
+```
+
+##### Models for C. perfringens in seawater
+
+```{r}
+#Subset model data for staph
+Cperf_W_mod_data1=
+  merged_data[c("Site.x", "Location.x","Cperf_W","Comp.1","Comp.2","Water_Level")]
+
+#remove na
+Cperf_W_mod_data=na.omit(Cperf_W_mod_data1)
+
+#full model with random effect (rd, (1|Site.x))
+mod_Cperf_full_rd=glmmTMB(Cperf_W ~ Comp.1 + Comp.2 +
+                        Water_Level +(1|Site.x), 
+                        family = nbinom2, 
+                      ziformula = ~ 1, #for zero-inflatation
+                      # dispformula = ~1, #for over dispersion
+                      data = Cperf_W_mod_data)
+summary(mod_Cperf_full_rd)
+#testDispersion(mod_Cperf_full_rd, alternative="less") #not under-dispersed
+performance::check_overdispersion(mod_Cperf_full_rd) #overdispersed data
+performance::check_zeroinflation(mod_Cperf_full_rd) #OK
+performance::check_collinearity(mod_Cperf_full_rd) #low correlation
+#@return `TRUE` if convergence is fine and `FALSE` if convergence
+#'   is suspicious. Additionally, the convergence value is returned as attribute.
+performance::check_convergence(mod_Cperf_full_rd) #convergence is fine
+#`TRUE` if the model fit is singular.
+performance::check_singularity(mod_Cperf_full_rd) #does not suffer from singularity
+
+#checking significance of random effect to improve model structure
+mod_Cperf_full=glmmTMB(Cperf_W ~ Comp.1 + Comp.2 +
+                        Water_Level, #+(1|Site.x), 
+                        family = nbinom2, 
+                      ziformula = ~ 1, #for zero-inflatation
+                      # dispformula = ~1, #for over dispersion
+                      data = Cperf_W_mod_data)
+anova(mod_Cperf_full_rd,mod_Cperf_full) #not significant, thus removed
+
+#testDispersion(mod_Cperf_full, alternative="less") #not under-dispersed
+performance::check_overdispersion(mod_Cperf_full) #overdispersed so negbin
+performance::check_zeroinflation(mod_Cperf_full) #OK 
+performance::check_collinearity(mod_Cperf_full) #low correlation
+performance::check_convergence(mod_Cperf_full) #convergence is fine
+performance::check_singularity(mod_Cperf_full) #does not suffer from singularity
+
+#model with no Comp. 1
+mod_Cperf_noPC1=glmmTMB(Cperf_W ~ Comp.2 + 
+                              Water_Level,#+(1|Site.x), 
+                            family = nbinom2,
+                            ziformula = ~ 1,
+                            data = Cperf_W_mod_data)
+summary(mod_Cperf_noPC1)
+#testDispersion(mod_Cperf_noPC1, alternative="less")
+performance::check_zeroinflation(mod_Cperf_noPC1) #OK
+
+#model with no Comp. 2
+mod_Cperf_noPC2=glmmTMB(Cperf_W ~ Comp.1 + 
+                              Water_Level,#+(1|Site.x), 
+                            family = nbinom2, 
+                          ziformula = ~ 1,
+                            data = Cperf_W_mod_data)
+summary(mod_Cperf_noPC2)
+#testDispersion(mod_Cperf_noPC2, alternative="less")
+performance::check_zeroinflation(mod_Cperf_noPC2) # OK 
+
+#model with no Water level
+mod_Cperf_noWL=glmmTMB(Cperf_W ~ Comp.1 + Comp.2,# + 
+                           #(1|Site.x), 
+                          family = nbinom2, 
+                       ziformula = ~ 1,
+                         data = Cperf_W_mod_data)
+summary(mod_Cperf_noWL)
+#testDispersion(mod_Cperf_noWL, alternative="less")
+performance::check_zeroinflation(mod_Cperf_noWL) # OK 
+
+#model with only comp.1 
+mod_Cperf_PC1_only=glmmTMB(Cperf_W ~ Comp.1,# +  
+                          # (1|Site.x), 
+                           family = nbinom2, 
+                           ziformula = ~ 1,
+                           data = Cperf_W_mod_data)
+summary(mod_Cperf_PC1_only)
+#testDispersion(mod_Cperf_pca_PC1_only, alternative="less")
+performance::check_zeroinflation(mod_Cperf_PC1_only) # OK 
+
+#model with only comp.2 
+mod_Cperf_PC2_only=glmmTMB(Cperf_W ~ Comp.2, #+  
+                         #  (1|Site.x), 
+                           family = nbinom2, 
+                           ziformula = ~ 1,
+                           data = Cperf_W_mod_data)
+summary(mod_Cperf_PC2_only)
+#testDispersion(mod_Cperf_PC2_only, alternative="less")
+performance::check_zeroinflation(mod_Cperf_PC2_only) # OK 
+
+#model with only WL
+mod_Cperf_WL_only=glmmTMB(Cperf_W ~ Water_Level, #+  
+                          # (1|Site.x), 
+                            ziformula = ~ 1,
+                           family = nbinom2, 
+                           data = Cperf_W_mod_data)
+summary(mod_Cperf_WL_only)
+#testDispersion(mod_Cperf_WL_only, alternative="less")
+performance::check_zeroinflation(mod_Cperf_WL_only) # OK 
+
+#null model (intercept only model)
+mod_Cperf_intercept=glmmTMB(Cperf_W ~ 1,#+(1|Site.x), 
+                                family = nbinom2, 
+                                data = Cperf_W_mod_data)
+
+Cperf_W_models1=list(mod_Cperf_full, #1
+                 mod_Cperf_noPC1, #2
+                 mod_Cperf_noPC2, #3
+                mod_Cperf_noWL, #4
+                mod_Cperf_PC1_only, #5
+                mod_Cperf_PC2_only,#6
+                mod_Cperf_WL_only,#7
+                mod_Cperf_intercept) #8
+
+Cperf_w_pca_models = model.sel(Cperf_W_models1)
+Cperf_w_pca_models
+
+performance::r2_nakagawa(mod_Cperf_full) #1
+performance::r2_nakagawa(mod_Cperf_noPC2) #3
+performance::r2_nakagawa(mod_Cperf_WL_only) #7
+performance::r2_nakagawa(mod_Cperf_noPC1) #2
+performance::r2_nakagawa(mod_Cperf_noWL) #4
+performance::r2_nakagawa(mod_Cperf_intercept) #8
+performance::r2_nakagawa(mod_Cperf_PC2_only) #6
+performance::r2_nakagawa(mod_Cperf_PC1_only) #5
+```
+
+
+#### Models for sand concentrations 
+
+##### Models for Staphylococcus aureus in sand
+
+```{r}
+#Subset model data for staph
+Staph_S_mod_data1=
+  merged_data[c("Site.x", "Location.x","Staph_S","Comp.1","Comp.2","Water_Level")]
+
+#remove na
+Staph_S_mod_data=na.omit(Staph_S_mod_data1)
+
+#Environmental only
+mod_Staph_S_full=glmmTMB(Staph_S ~ Comp.1 + Comp.2 + 
+                                  Water_Level + 
+                                  (1|Site.x), 
+                                family = nbinom2, 
+                         ziformula = ~ 1, #for zero-inflatation
+                      # dispformula = ~1, #for over dispersion
+                                data = Staph_S_mod_data)
+summary(mod_Staph_S_full)
+#testDispersion(mod_Staph_S_full, alternative="less")
+performance::check_overdispersion(mod_Staph_S_full) #overdispersed so negbin
+performance::check_zeroinflation(mod_Staph_S_full) #need zero-inflation
+performance::check_collinearity(mod_Staph_S_full) #low correlation
+performance::check_convergence(mod_Staph_S_full) #no convergence
+performance::check_singularity(mod_Staph_S_full) #no singularity
+
+#Environmental only no PC1
+mod_Staph_S_noPC1=glmmTMB(Staph_S ~ Comp.2 + 
+                                        Water_Level+
+                                        (1|Site.x), 
+                          ziformula = ~ 1, #for zero-inflatation
+                                      family = nbinom2, 
+                                      data = Staph_S_mod_data)
+summary(mod_Staph_S_noPC1)
+#testDispersion(mod_Staph_S_noPC1, alternative="less")
+#performance::check_overdispersion(mod_Staph_S_noPC1) 
+performance::check_zeroinflation(mod_Staph_S_noPC1) 
+
+#Environmental only no PC2
+mod_Staph_S_noPC2=glmmTMB(Staph_S ~ Comp.1 + 
+                                        Water_Level + 
+                                        (1|Site.x), 
+                           ziformula = ~ 1, #for zero-inflatation
+                                      family = nbinom2,
+                                      data = Staph_S_mod_data)
+summary(mod_Staph_S_noPC2)
+#testDispersion(mod_Staph_S_noPC2, alternative="less")
+#performance::check_overdispersion(mod_Staph_S_noPC2) 
+performance::check_zeroinflation(mod_Staph_S_noPC2) 
+
+#Environmental only no WL
+mod_Staph_S_noWL=glmmTMB(Staph_S ~ Comp.1 + Comp.2+ 
+                                       (1|Site.x), 
+                          ziformula = ~ 1, #for zero-inflatation
+                                     family = nbinom2, 
+                                     data = Staph_S_mod_data)
+summary(mod_Staph_S_noWL)
+#testDispersion(mod_Staph_S_noWL, alternative="less")
+#performance::check_overdispersion(mod_Staph_S_noWL) 
+performance::check_zeroinflation(mod_Staph_S_noWL) 
+
+#Comp.1 only
+mod_Staph_S_PC1_only=glmmTMB(Staph_S ~ Comp.1+
+                                      (1|Site.x), 
+                              ziformula = ~ 1, #zero-inflatation
+                                    family = nbinom2,
+                                    data = Staph_S_mod_data)
+summary(mod_Staph_S_PC1_only)
+#testDispersion(mod_Staph_S_PC1_only, alternative="less")
+#performance::check_overdispersion(mod_Staph_S_PC1_only) 
+performance::check_zeroinflation(mod_Staph_S_PC1_only) 
+
+#Comp.2 only
+mod_Staph_S_PC2_only=glmmTMB(Staph_S ~ Comp.2+(1|Site.x),
+                                    family = nbinom2, 
+                                  ziformula = ~ 1, #zero-inflatation
+                                    data = Staph_S_mod_data)
+summary(mod_Staph_S_PC2_only)
+#testDispersion(mod_Staph_S_PC2_only, alternative="less")
+#performance::check_overdispersion(mod_Staph_S_PC2_only) 
+performance::check_zeroinflation(mod_Staph_S_PC2_only) 
+
+#WL only
+mod_Staph_S_WL_only=glmmTMB(Staph_S ~ Water_Level+
+                                  (1|Site.x), 
+                             ziformula = ~ 1, #zero-inflatation
+                                family = nbinom2, 
+                                data = Staph_S_mod_data)
+summary(mod_Staph_S_WL_only)
+#testDispersion(mod_Staph_S_WL_only, alternative="less")
+#performance::check_overdispersion(mod_Staph_S_WL_only) 
+performance::check_zeroinflation(mod_Staph_S_WL_only) 
+
+#null (intercept only) model
+mod_Staph_S_intercept=glmmTMB(Staph_S ~ 1+(1|Site.x), 
+                                  family = nbinom2, 
+                                  data = Staph_S_mod_data)
+
+staph_S_models1=list(
+                    mod_Staph_S_full,#1 - PC1, PC2, WL
+                    mod_Staph_S_noPC1, #2 - PC2, WL
+                    mod_Staph_S_noPC2, #3 - PC1, WL
+                    mod_Staph_S_noWL, #4 - PC1, PC2
+                    mod_Staph_S_PC1_only, #5
+                    mod_Staph_S_PC2_only, #6
+                    mod_Staph_S_WL_only, #7
+                    mod_Staph_S_intercept) #8 Intercept only
+
+#plot(allEffects(mod_Staph_pca))
+staph_s_pca_models = model.sel(staph_S_models1)
+staph_s_pca_models
+
+performance::r2_nakagawa(mod_Staph_S_full)#1
+performance::r2_nakagawa(mod_Staph_S_noPC1)#2
+performance::r2_nakagawa(mod_Staph_S_noWL)#4
+performance::r2_nakagawa(mod_Staph_S_PC2_only)#6
+performance::r2_nakagawa(mod_Staph_S_WL_only) #7
+performance::r2_nakagawa(mod_Staph_S_noPC2) #3
+performance::r2_nakagawa(mod_Staph_S_PC1_only) #5
+performance::r2_nakagawa(mod_Staph_S_intercept) #8
+```
+
+
+##### Models for MRSA in sand
+
+```{r}
+#Subset model data for staph
+MRSA_S_mod_data1=
+  merged_data[c("Site.x", "Location.x","MRSA_S",
+                "Comp.1","Comp.2","Water_Level")]
+
+#remove na
+MRSA_S_mod_data=na.omit(MRSA_S_mod_data1)
+
+#environmental only
+mod_MRSA_S_full=glmmTMB(MRSA_S ~ Comp.1 + Comp.2 +  
+                                 Water_Level,# + (1|Site.x),
+                               family = nbinom2, 
+                         ziformula = ~ 1, #for zero-inflatation
+                      # dispformula = ~1, #for over dispersion
+                               data = MRSA_S_mod_data)
+summary(mod_MRSA_S_full)
+#testDispersion(mod_MRSA_S_full, alternative="less") #not under dispersed
+performance::check_overdispersion(mod_MRSA_S_full) #over-dispersed data
+performance::check_zeroinflation(mod_MRSA_S_full) #zero-inflation needed
+performance::check_collinearity(mod_MRSA_S_full) #low correlation
+performance::check_convergence(mod_MRSA_S_full) #convergence is fine
+performance::check_singularity(mod_MRSA_S_full) #no singularity
+
+#checking significance of random effect to improve model structure
+mod_MRSA_S_full_nord=glmmTMB(MRSA_S ~ Comp.1 + Comp.2 +  
+                                 Water_Level,# + (1|Site.x),
+                               family = nbinom2, 
+                         ziformula = ~ 1, #for zero-inflatation
+                      # dispformula = ~1, #for over dispersion
+                               data = MRSA_S_mod_data)
+anova(mod_MRSA_S_full_nord,mod_MRSA_S_full)
+#random effect not significant, removed from models
+
+#EM only no component 1
+mod_MRSA_S_noPC1=glmmTMB(MRSA_S ~ Comp.2 + 
+                                       Water_Level,# +(1|Site.x), 
+                          ziformula = ~ 1, #for zero-inflatation
+                                     family = nbinom2, 
+                                     data = MRSA_S_mod_data)
+summary(mod_MRSA_S_noPC1)
+#testDispersion(mod_MRSA_S_noPC1, alternative="less")
+performance::check_zeroinflation(mod_MRSA_S_noPC1)
+
+#EM only no component 2
+mod_MRSA_S_noPC2=glmmTMB(MRSA_S ~ Comp.1 +  
+                                       Water_Level,# + (1|Site.x), 
+                         ziformula = ~ 1, #for zero-inflatation
+                                     family = nbinom2, 
+                                     data = MRSA_S_mod_data)
+summary(mod_MRSA_S_noPC2)
+#testDispersion(mod_MRSA_S_noPC2, alternative="less")
+performance::check_zeroinflation(mod_MRSA_S_noPC2)
+
+#EM only no water level
+mod_MRSA_S_noWL=glmmTMB(MRSA_S ~ Comp.1 + Comp.2,# + 
+                                     # (1|Site.x), 
+                         ziformula = ~ 1, #for zero-inflatation
+                                    family = nbinom2, 
+                                    data = MRSA_S_mod_data)
+summary(mod_MRSA_S_noWL)
+#testDispersion(mod_MRSA_S_noWL, alternative="less")
+performance::check_zeroinflation(mod_MRSA_S_noWL)
+
+#Comp.1 only
+mod_MRSA_S_PC1_only=glmmTMB(MRSA_S ~ Comp.1,#+(1|Site.x), 
+                             ziformula = ~ 1, #for zero-inflatation
+                                   family = nbinom2, 
+                                   data = MRSA_S_mod_data)
+summary(mod_MRSA_S_PC1_only)
+#testDispersion(mod_MRSA_S_PC1_only, alternative="less")
+performance::check_zeroinflation(mod_MRSA_S_PC1_only)
+
+#Comp.2 only
+mod_MRSA_S_PC2_only=glmmTMB(MRSA_S ~ Comp.2,#+(1|Site.x), 
+                            ziformula = ~ 1, #for zero-inflatation
+                                   family = nbinom2,
+                                   data = MRSA_S_mod_data)
+summary(mod_MRSA_S_PC2_only)
+#testDispersion(mod_MRSA_S_PC2_only, alternative="less")
+performance::check_zeroinflation(mod_MRSA_S_PC2_only)
+
+#WL only
+mod_MRSA_S_WL_only=glmmTMB(MRSA_S ~ Water_Level,#+(1|Site.x), 
+                           ziformula = ~ 1, #for zero-inflatation
+                               family = nbinom2, 
+                               data = MRSA_S_mod_data)
+summary(mod_MRSA_S_WL_only)
+#testDispersion(mod_MRSA_S_WL_only, alternative="less")
+performance::check_zeroinflation(mod_MRSA_S_WL_only)
+
+#intercept only
+mod_MRSA_S_intercept=glmmTMB(MRSA_S ~ 1,#+(1|Site.x), 
+                                 family = nbinom2, 
+                                 data = MRSA_S_mod_data)
+
+MRSA_S_models1=list(
+                    mod_MRSA_S_full, #1 - PC1, PC2, WL
+                    mod_MRSA_S_noPC1, #2 -  PC2, WL
+                    mod_MRSA_S_noPC2, #3 - PC1, WL
+                    mod_MRSA_S_noWL, #4 - PC1, PC2
+                    mod_MRSA_S_PC1_only, #5 - 
+                    mod_MRSA_S_PC2_only, #6 - 
+                   mod_MRSA_S_WL_only , #7 -  
+                    mod_MRSA_S_intercept) #8 - intercept only
+
+MRSA_s_pca_models = model.sel(MRSA_S_models1)
+MRSA_s_pca_models
+
+#edit this for MRSA models in supplementals
+performance::r2_nakagawa(mod_MRSA_S_noPC2) #3
+performance::r2_nakagawa(mod_MRSA_S_full) #1
+performance::r2_nakagawa(mod_MRSA_S_WL_only) #7
+performance::r2_nakagawa(mod_MRSA_S_noPC1) #2
+performance::r2_nakagawa(mod_MRSA_S_noWL) #4
+performance::r2_nakagawa(mod_MRSA_S_PC2_only) #6
+performance::r2_nakagawa(mod_MRSA_S_PC1_only) #5
+performance::r2_nakagawa(mod_MRSA_S_intercept) #8
+```
+
+
+
+##### Models for Enterococcus spp. in sand
+
+
+```{r}
+#Subset model data for ENT
+Ent_S_mod_data1=
+  merged_data[c("Site.x", "Location.x","Ent_S",
+                "Comp.1","Comp.2","Water_Level")]
+
+#remove na
+Ent_S_mod_data=na.omit(Ent_S_mod_data1)
+
+#em only
+mod_Ent_S_full=glmmTMB(Ent_S ~ Comp.1 + Comp.2 +
+                                Water_Level + (1|Site.x), 
+                      # ziformula = ~ 1, #for zero-inflatation, no non-zeros
+                      # dispformula = ~1, #for over dispersion
+                              family = nbinom2, data = Ent_S_mod_data)
+summary(mod_Ent_S_full)
+#testDispersion(mod_Ent_S_full, alternative="less") #not under-dispersed
+performance::check_overdispersion(mod_Ent_S_full) #over-dispersed data
+performance::check_zeroinflation(mod_Ent_S_full) #no non-zero values
+performance::check_collinearity(mod_Ent_S_full) #low correlation
+performance::check_convergence(mod_Ent_S_full) #convergence is fine
+performance::check_singularity(mod_Ent_S_full) #does not suffer singularity
+
+#em only no comp 1
+mod_Ent_S_noPC1=glmmTMB(Ent_S ~  Comp.2 + 
+                                  Water_Level +(1|Site.x), 
+                                  family = nbinom2, 
+                                  data = Ent_S_mod_data)
+summary(mod_Ent_S_noPC1)
+#testDispersion(mod_Ent_S_noPC1, alternative="less") 
+performance::check_overdispersion(mod_Ent_S_noPC1) 
+
+#em only no comp 2
+mod_Ent_S_noPC2=glmmTMB(Ent_S ~ Comp.1 + 
+                                    Water_Level + (1|Site.x), 
+                                    family = nbinom2, 
+                                    data = Ent_S_mod_data)
+summary(mod_Ent_S_noPC2)
+#testDispersion(mod_Ent_S_noPC2, alternative="less") 
+performance::check_overdispersion(mod_Ent_S_noPC2) 
+
+#em only no water level
+mod_Ent_S_noWL=glmmTMB(Ent_S ~ Comp.1 + Comp.2 +
+                                (1|Site.x), 
+                                family = nbinom2, 
+                                data = Ent_S_mod_data)
+summary(mod_Ent_S_noWL)
+#testDispersion(mod_Ent_S_noWL, alternative="less") 
+performance::check_overdispersion(mod_Ent_S_noWL) 
+
+#Comp.1 only
+mod_Ent_S_PC1_only=glmmTMB(Ent_S ~ Comp.1+(1|Site.x), 
+                                  family = nbinom2, 
+                                  data = Ent_S_mod_data)
+summary(mod_Ent_S_PC1_only)
+#testDispersion(mod_Ent_S_PC1_only, alternative="less") 
+performance::check_overdispersion(mod_Ent_S_PC1_only) 
+
+#Comp.2 only
+mod_Ent_S_PC2_only=glmmTMB(Ent_S ~ Comp.2+(1|Site.x), 
+                                  family = nbinom2, 
+                                  data = Ent_S_mod_data)
+summary(mod_Ent_S_PC2_only)
+#testDispersion(mod_Ent_S_PC2_only, alternative="less") 
+performance::check_overdispersion(mod_Ent_S_PC2_only) 
+
+#WL only
+mod_Ent_S_WL_only=glmmTMB(Ent_S ~ Water_Level+(1|Site.x), 
+                              family = nbinom2, 
+                              data = Ent_S_mod_data)
+summary(mod_Ent_S_WL_only)
+#testDispersion(mod_Ent_S_WL_only, alternative="less") 
+performance::check_overdispersion(mod_Ent_S_WL_only) 
+
+#null (intercept) only model
+mod_Ent_S_intercept=glmmTMB(Ent_S ~ 1+(1|Site.x), 
+                                family = nbinom2, 
+                                data = Ent_S_mod_data)
+
+Ent_S_models1=list(
+              mod_Ent_S_full, #1
+              mod_Ent_S_noPC1, #2
+              mod_Ent_S_noPC2, #3
+              mod_Ent_S_noWL, #4
+              mod_Ent_S_PC1_only, #5
+              mod_Ent_S_PC2_only,#6
+              mod_Ent_S_WL_only,#7
+               mod_Ent_S_intercept) #8
+
+#plot(allEffects(mod_Ent_pca))
+Ent_s_pca_models = model.sel(Ent_S_models1)
+Ent_s_pca_models
+
+performance::r2_nakagawa(mod_Ent_S_full) #1
+performance::r2_nakagawa(mod_Ent_S_WL_only)#7
+performance::r2_nakagawa(mod_Ent_S_noPC1) #2
+performance::r2_nakagawa(mod_Ent_S_noPC2) #3
+performance::r2_nakagawa(mod_Ent_S_noWL) #4
+performance::r2_nakagawa(mod_Ent_S_PC1_only) #5
+performance::r2_nakagawa(mod_Ent_S_intercept) #8
+performance::r2_nakagawa(mod_Ent_S_PC2_only) #6
+```
+
+
+##### Models for C. perfringens in sand
+
+```{r}
+#Subset model data for ENT
+Cperf_S_mod_data1=
+  merged_data[c("Site.x", "Location.x","Cperf_S",
+                "Comp.1","Comp.2","Water_Level")]
+
+#remove na
+Cperf_S_mod_data=na.omit(Cperf_S_mod_data1)
+#library(glmmTMB)
+#No Cperf/EM only
+mod_Cperf_S_full=glmmTMB(Cperf_S ~ Comp.1 + Comp.2 + 
+                                  Water_Level,# + (1|Site.x), 
+                                  ziformula = ~ 1, #for zero-inflation
+                                  family = nbinom2, 
+                                  data = Cperf_S_mod_data)
+summary(mod_Cperf_S_full)
+#testDispersion(mod_Cperf_S_full, alternative="less") #not under-dispersed
+performance::check_overdispersion(mod_Cperf_S_full) #not over-dispersed
+performance::check_zeroinflation(mod_Cperf_S_full) #zero-inflated required
+performance::check_collinearity(mod_Cperf_S_full) #low correlation
+performance::check_convergence(mod_Cperf_S_full) #convergence is fine
+performance::check_singularity(mod_Cperf_S_full) #no more singularity once random effect removed
+
+#check significance of random effect
+mod_Cperf_S_full_nord=glmmTMB(Cperf_S ~ Comp.1 + Comp.2 + 
+                                  Water_Level,# + (1|Site.x), 
+                                  ziformula = ~ 1, #for zero-inflation
+                                  family = nbinom2, 
+                                  data = Cperf_S_mod_data)
+anova(mod_Cperf_S_full_nord,mod_Cperf_S_full)
+#not significant, so removed radnom effect, improved model (no more singularity)
+
+#EM only no PC1
+mod_Cperf_S_noPC1=glmmTMB(Cperf_S ~  Comp.2 + 
+                                    Water_Level,# +(1|Site.x), 
+                                    ziformula = ~ 1, #for zero-inflation
+                                    family = nbinom2, 
+                                    data = Cperf_S_mod_data)
+summary(mod_Cperf_S_noPC1)
+#testDispersion(mod_Cperf_S_noPC1, alternative="less") 
+performance::check_overdispersion(mod_Cperf_S_noPC1) 
+performance::check_zeroinflation(mod_Cperf_S_noPC1) #zero-inflation
+
+#EM only no PC2
+mod_Cperf_S_noPC2=glmmTMB(Cperf_S ~ Comp.1 +  
+                                    Water_Level,# + (1|Site.x),
+                                    ziformula = ~ 1, #for zero-inflation
+                                    family = nbinom2, 
+                                    data = Cperf_S_mod_data)
+summary(mod_Cperf_S_noPC2)
+#testDispersion(mod_Cperf_S_noPC2, alternative="less") 
+performance::check_overdispersion(mod_Cperf_S_noPC2) 
+performance::check_zeroinflation(mod_Cperf_S_noPC2) #zero-inflation
+
+#EM only no WL
+mod_Cperf_S_noWL=glmmTMB(Cperf_S ~ Comp.1 + Comp.2,# +
+                                    #(1|Site.x), 
+                                    ziformula = ~ 1, #for zero-inflation
+                                    family = nbinom2, 
+                                    data = Cperf_S_mod_data)
+summary(mod_Cperf_S_noWL)
+#testDispersion(mod_Cperf_S_noWL, alternative="less") 
+performance::check_overdispersion(mod_Cperf_S_noWL) 
+performance::check_zeroinflation(mod_Cperf_S_noWL) #zero-inflation
+
+#Comp.1 only
+mod_Cperf_S_PC1_only=glmmTMB(Cperf_S ~  Comp.1,#+(1|Site.x), 
+                                        ziformula = ~ 1, #for zero-inflation
+                                        family = nbinom2, 
+                                        data = Cperf_S_mod_data)
+summary(mod_Cperf_S_PC1_only)
+#testDispersion(mod_Cperf_S_PC1_only, alternative="less") 
+performance::check_overdispersion(mod_Cperf_S_PC1_only) 
+performance::check_zeroinflation(mod_Cperf_S_PC1_only) #zero-inflation
+
+#Comp.2 only
+mod_Cperf_S_PC2_only=glmmTMB(Cperf_S ~  Comp.2,#+(1|Site.x),
+                                        ziformula = ~ 1, #for zero-inflation
+                                        family = nbinom2, 
+                                        data = Cperf_S_mod_data)
+summary(mod_Cperf_S_PC2_only)
+#testDispersion(mod_Cperf_S_PC2_only, alternative="less") 
+performance::check_overdispersion(mod_Cperf_S_PC2_only) 
+performance::check_zeroinflation(mod_Cperf_S_PC2_only) #zero-inflation
+
+#WL only
+mod_Cperf_S_WL_only=glmmTMB(Cperf_S ~  Water_Level,#+(1|Site.x), 
+                                       ziformula = ~ 1, #for zero-inflation
+                                      family = nbinom2, 
+                                      data = Cperf_S_mod_data)
+summary(mod_Cperf_S_WL_only)
+#testDispersion(mod_Cperf_S_WL_only, alternative="less") 
+performance::check_overdispersion(mod_Cperf_S_WL_only) 
+performance::check_zeroinflation(mod_Cperf_S_WL_only) #zero-inflation
+
+#null (intercept only) model
+mod_Cperf_S_intercept=glmmTMB(Cperf_S ~ 1,#+(1|Site.x),
+                                        family = nbinom2, 
+                                        data = Cperf_S_mod_data)
+
+Cperf_S_models1=list(
+               mod_Cperf_S_full, #1
+               mod_Cperf_S_noPC1, #2
+               mod_Cperf_S_noPC2, #3
+               mod_Cperf_S_noWL, #4
+               mod_Cperf_S_PC1_only, #5
+               mod_Cperf_S_PC2_only, #6
+               mod_Cperf_S_WL_only, #7
+               mod_Cperf_S_intercept) #8
+
+Cperf_s_pca_models = model.sel(Cperf_S_models1)
+Cperf_s_pca_models
+
+performance::r2_nakagawa(mod_Cperf_S_noPC1) #2
+performance::r2_nakagawa(mod_Cperf_S_full) #1
+performance::r2_nakagawa(mod_Cperf_S_PC2_only)#6
+performance::r2_nakagawa(mod_Cperf_S_noWL)#4
+performance::r2_nakagawa(mod_Cperf_S_WL_only) #7
+performance::r2_nakagawa(mod_Cperf_S_noPC2) #3
+performance::r2_nakagawa(mod_Cperf_S_PC1_only) #5
+performance::r2_nakagawa(mod_Cperf_S_intercept) #8
+```
+
+
+##Model predictions
+
+Approximate "accuracy" of predictive models.
+
+###S. aureus seawater
+```{r}
+mod_Staph_full
+staph_predictions=predict(mod_Staph_full,newdata=Staph_W_mod_data,type="response") #predicted values from model
+threshold=0.5 
+staph_predicted_classes=ifelse(staph_predictions>threshold, 1,0) #Predicted counts above this threshold are classified as 1, and those below or equal to it are classified as 0, creating binary classes
+staph_actual_classes=Staph_W_mod_data$Staph_W
+staph_conf_matrix=table(staph_actual_classes,staph_predicted_classes)
+staph_conf_matrix #A confusion matrix (staph_conf_matrix) is created to compare the predicted classes (staph_predicted_classes) against the actual classes (Staph_W_mod_data$Staph_W). The matrix shows the counts of true positive, true negative, false positive, and false negative predictions.
+staph_accuracy=sum(diag(staph_conf_matrix))/sum(staph_conf_matrix)*100 #The accuracy of the model is calculated using the confusion matrix. It sums the diagonal elements (correct predictions) and divides by the total number of predictions, providing a percentage accuracy value (staph_accuracy).
+staph_accuracy
+
+```
+
+Top model for S. aureus in seawater accuracy % = 37%
+
+```{r}
+ # Create a sequence of threshold values
+thresholds <- seq(0.1, 0.9, by = 0.1)
+
+# Initialize an empty vector to store accuracy values
+accuracy_values <- numeric(length(thresholds))
+
+# Loop through each threshold
+for (i in seq_along(thresholds)) {
+  # Assign the current threshold
+  threshold <- thresholds[i]
+  
+  # Make predictions based on the threshold
+  staph_predicted_classes <- ifelse(staph_predictions > threshold, 1, 0)
+  
+  # Create a confusion matrix
+  staph_conf_matrix <- table(staph_actual_classes, staph_predicted_classes)
+  
+  # Calculate accuracy and store it
+  accuracy_values[i] <- sum(diag(staph_conf_matrix)) / sum(staph_conf_matrix) * 100
+}
+
+# Find the threshold that maximizes accuracy
+optimal_threshold <- thresholds[which.max(accuracy_values)]
+
+# Print results
+print(paste("Optimal Threshold:", optimal_threshold))
+print(paste("Max Accuracy:", max(accuracy_values)))
+
+```
+
+
+###MRSA seawater
+
+```{r}
+predictions=predict(mod_MRSA_full,newdata=MRSA_W_mod_data,type="response")
+threshold=0.5
+predicted_classes=ifelse(predictions>threshold, 1,0)
+actual_classes=MRSA_W_mod_data$MRSA_W
+conf_matrix=table(actual_classes,predicted_classes)
+conf_matrix
+accuracy=sum(diag(conf_matrix))/sum(conf_matrix)*100
+accuracy
+```
+Top model for MRSA in seawater accuracy % = 50.75%
+
+###Enterococcus spp. seawater
+
+```{r}
+predictions=predict(mod_Ent_full,newdata=Ent_W_mod_data,type="response")
+threshold=0.5
+predicted_classes=ifelse(predictions>threshold, 1,0)
+actual_classes=Ent_W_mod_data$Ent_W
+conf_matrix=table(actual_classes,predicted_classes)
+conf_matrix
+accuracy=sum(diag(conf_matrix))/sum(conf_matrix)*100
+accuracy
+```
+Top model for Enterococcus spp. in seawater accuracy = 14.39%
+
+###C. perfringens seawater
+```{r}
+predictions=predict(mod_Cperf_full,newdata=Cperf_W_mod_data,type="response")
+threshold=0.5
+predicted_classes=ifelse(predictions>threshold, 1,0)
+actual_classes=Cperf_W_mod_data$Cperf_W
+conf_matrix=table(actual_classes,predicted_classes)
+conf_matrix
+accuracy=sum(diag(conf_matrix))/sum(conf_matrix)*100
+accuracy
+```
+C. perfringens accuracy = 43.93%
+
+###S. aureus sand
+```{r}
+predictions=predict(mod_Staph_S_full,newdata=Staph_S_mod_data,type="response")
+threshold=0.5
+predicted_classes=ifelse(predictions>threshold, 1,0)
+actual_classes=Staph_S_mod_data$Staph_S
+conf_matrix=table(actual_classes,predicted_classes)
+conf_matrix
+accuracy=sum(diag(conf_matrix))/sum(conf_matrix)*100
+accuracy
+```
+Model accuracy = 15.15 %
+
+###MRSA sand
+```{r}
+predictions=predict(mod_MRSA_S_full,newdata=MRSA_S_mod_data,type="response")
+threshold=0.5
+predicted_classes=ifelse(predictions>threshold, 1,0)
+actual_classes=MRSA_S_mod_data$MRSA_S
+conf_matrix=table(actual_classes,predicted_classes)
+conf_matrix
+accuracy=sum(diag(conf_matrix))/sum(conf_matrix)*100
+accuracy
+```
+Model accuracy = 49.24%
+
+###Enterococcus spp. sand
+```{r}
+predictions=predict(mod_Ent_S_full,newdata=Ent_S_mod_data,type="response")
+threshold=0.5
+predicted_classes=ifelse(predictions>threshold, 1,0)
+actual_classes=Ent_S_mod_data$Ent_S
+conf_matrix=table(actual_classes,predicted_classes)
+conf_matrix
+accuracy=sum(diag(conf_matrix))/sum(conf_matrix)*100
+accuracy
+```
+Model accuracy = 6.06%
+
+###C. pefringens sand
+```{r}
+predictions=predict(mod_Cperf_S_full,newdata=Cperf_S_mod_data,type="response")
+threshold=0.5
+predicted_classes=ifelse(predictions>threshold, 1,0)
+actual_classes=Cperf_S_mod_data$Cperf_S
+conf_matrix=table(actual_classes,predicted_classes)
+conf_matrix
+accuracy=sum(diag(conf_matrix))/sum(conf_matrix)*100
+accuracy
+```
+Model accuracy = 16.67%
+
+#### Models Effects Plots
+
+```{r message=FALSE, warning=FALSE}
+
+#plot(allEffects(mod_Staph_pca))
+my_y_title_staph<-expression(paste(italic('S. aureus'), " CFU/100mL"))
+my_y_title_staph_S<-expression(paste(italic('S. aureus'), " CFU/10 g"))
+my_y_title_ENT<-expression(paste(italic('Enterococcus'), " spp. MPN/100 mL"))
+my_y_title_ENT_S<-expression(paste(italic('Enterococcus'), " spp. MPN/10 g"))
+my_y_title_CPERF<-expression(paste(italic('C. perfringens'), " CFU/100mL"))
+my_y_title_CPERF_S<-expression(paste(italic('C. perfringens'), " CFU/10 g"))
+```
+
+```{r message=FALSE, warning=FALSE}
+effects_plot_Staph_W=allEffects(mod_Staph_full)
+
+grid.arrange(
+  
+  plot(effects_plot_Staph_W$Comp.1,main="",
+       ylab=my_y_title_staph,xlab="PCA 1"),
+  
+  plot(effects_plot_Staph_W$Comp.2,main="",
+       ylab=my_y_title_staph,xlab="PCA 2"),
+  
+  plot(effects_plot_Staph_W$Water_Level,main="",
+       ylab=my_y_title_staph, xlab="Tidal Height"),
+  
+  ncol=3,nrow=1)
+
+```
+
+```{r}
+Staph_W_PC1_predict <- ggpredict(mod_Staph_full, terms = c("Comp.1"))
+Staph_W_PC2_predict <- ggpredict(mod_Staph_full, terms = c("Comp.2"))
+Staph_W_WL_predict <- ggpredict(mod_Staph_full, terms = c("Water_Level"))
+
+Staph_W_PC1_Predict=plot(Staph_W_PC1_predict)+
+  geom_point(data=Staph_W_mod_data, 
+             aes(x = Comp.1, y = Staph_W), color = "cornflowerblue", 
+             size=2) +
+  labs(x = "PC1", y = my_y_title_staph) +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 500))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+
+
+Staph_W_PC2_Predict=plot(Staph_W_PC2_predict)+
+  geom_point(data=Staph_W_mod_data, 
+             aes(x = Comp.2, y = Staph_W), color = "coral1", 
+             size=2) +
+  labs(x = "PC2", y = my_y_title_staph) +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 500),xlim=c(-3,3))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+  
+
+Staph_W_WL_Predict=plot(Staph_W_WL_predict)+
+  geom_point(data=Staph_W_mod_data, 
+             aes(x = Water_Level, y = Staph_W), color = "seagreen", 
+             size=2) +
+  labs(x = "Tidal Height", y = my_y_title_staph) +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 300))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+
+```
+
+
+```{r message=FALSE, warning=FALSE}
+effects_plot_Staph_S=allEffects(mod_Staph_S_full)
+
+grid.arrange(
+  
+  plot(effects_plot_Staph_S$Comp.1,main="",
+       ylab=my_y_title_staph_S,xlab="PCA 1"),
+  
+  plot(effects_plot_Staph_S$Comp.2,main="",
+       ylab=my_y_title_staph_S,xlab="PCA 2"),
+  
+  plot(effects_plot_Staph_S$Water_Level,main="",
+       ylab=my_y_title_staph_S, xlab="Tidal Height"),
+  
+  ncol=3,nrow=1)
+```
+
+```{r}
+Staph_S_PC1_predict <- ggpredict(mod_Staph_S_full, terms = c("Comp.1"))
+Staph_S_PC2_predict <- ggpredict(mod_Staph_S_full, terms = c("Comp.2"))
+Staph_S_WL_predict <- ggpredict(mod_Staph_S_full, terms = c("Water_Level"))
+
+Staph_S_PC1_Predict=plot(Staph_S_PC1_predict)+
+  geom_point(data=Staph_S_mod_data, 
+             aes(x = Comp.1, y = Staph_S), color = "cornflowerblue", 
+             size=2) +
+  labs(x = "PC1", y = my_y_title_staph_S) +
+   ggtitle(" ") +
+   theme_bw() + 
+  # coord_cartesian(ylim=c(0, 500))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+
+
+Staph_S_PC2_Predict=plot(Staph_S_PC2_predict)+
+  geom_point(data=Staph_S_mod_data, 
+             aes(x = Comp.2, y = Staph_S), color = "coral1", 
+             size=2) +
+  labs(x = "PC2", y = my_y_title_staph_S) +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 80000))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+  
+
+Staph_S_WL_Predict=plot(Staph_S_WL_predict)+
+  geom_point(data=Staph_S_mod_data, 
+             aes(x = Water_Level, y = Staph_S), color = "seagreen", 
+             size=2) +
+  labs(x = "Tidal Height", y = my_y_title_staph_S) +
+   ggtitle(" ") +
+   theme_bw() + 
+  # coord_cartesian(ylim=c(0, 500))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+
+```
+
+
+```{r}
+effects_plot_MRSA_W=allEffects(mod_MRSA_full)
+
+grid.arrange(
+  
+  plot(effects_plot_MRSA_W$Comp.1,main="",
+       ylab="MRSA CFU/100 mL",xlab="PCA 1"),
+  
+  plot(effects_plot_MRSA_W$Comp.2,main="",
+       ylab="MRSA CFU/100 mL",xlab="PCA 2"),
+  
+  plot(effects_plot_MRSA_W$Water_Level,main="",
+       ylab="MRSA CFU/100 mL", xlab="Tidal Height"),
+  
+  ncol=3,nrow=1)
+
+```
+
+```{r}
+MRSA_W_PC1_predict <- ggpredict(mod_MRSA_full, terms = c("Comp.1"))
+MRSA_W_PC2_predict <- ggpredict(mod_MRSA_full, terms = c("Comp.2"))
+MRSA_W_WL_predict <- ggpredict(mod_MRSA_full, terms = c("Water_Level"))
+
+MRSA_W_PC1_Predict=plot(MRSA_W_PC1_predict)+
+  geom_point(data=MRSA_W_mod_data, 
+             aes(x = Comp.1, y = MRSA_W), color = "cornflowerblue", 
+             size=2) +
+  labs(x = "PC1", y = "MRSA CFU/100 mL") +
+   ggtitle(" ") +
+   theme_bw() + 
+ coord_cartesian(ylim=c(0, 300))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+
+
+MRSA_W_PC2_Predict=plot(MRSA_W_PC2_predict)+
+  geom_point(data=MRSA_W_mod_data, 
+             aes(x = Comp.2, y = MRSA_W), color = "coral1", 
+             size=2) +
+  labs(x = "PC2", y = "MRSA CFU/100 mL") +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 200),xlim=c(-3,3))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+  
+
+MRSA_W_WL_Predict=plot(MRSA_W_WL_predict)+
+  geom_point(data=MRSA_W_mod_data, 
+             aes(x = Water_Level, y = MRSA_W), color = "seagreen", 
+             size=2) +
+  labs(x = "Tidal Height", y = "MRSA CFU/100 mL") +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 300))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+
+```
+
+
+
+```{r eval=FALSE, include=FALSE}
+effects_plot_MRSA_S=allEffects(mod_MRSA_S_full)
+
+grid.arrange(
+  
+  plot(effects_plot_MRSA_S$Comp.1,main="",
+       ylab="MRSA CFU/10 g",xlab="PCA 1"),
+  
+  plot(effects_plot_MRSA_S$Comp.2,main="",
+       ylab="MRSA CFU/10 g",xlab="PCA 2"),
+
+  plot(effects_plot_MRSA_S$Water_Level,main="",
+       ylab="MRSA CFU/10 g", xlab="Tidal Height"),
+  
+  ncol=3,nrow=1)
+
+plot(allEffects(mod_MRSA_S_pca))
+
+```
+
+```{r}
+MRSA_S_PC1_predict <- ggpredict(mod_MRSA_S_full, terms = c("Comp.1"))
+MRSA_S_PC2_predict <- ggpredict(mod_MRSA_S_full, terms = c("Comp.2"))
+MRSA_S_WL_predict <- ggpredict(mod_MRSA_S_full, terms = c("Water_Level"))
+
+MRSA_S_PC1_Predict=plot(MRSA_S_PC1_predict)+
+  geom_point(data=MRSA_S_mod_data, 
+             aes(x = Comp.1, y = MRSA_S), color = "cornflowerblue", 
+             size=2) +
+  labs(x = "PC1", y = "MRSA CFU/10 g") +
+   ggtitle(" ") +
+   theme_bw() + 
+  # coord_cartesian(ylim=c(0, 500))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+
+
+MRSA_S_PC2_Predict=plot(MRSA_S_PC2_predict)+
+  geom_point(data=MRSA_S_mod_data, 
+             aes(x = Comp.2, y = MRSA_S), color = "coral1", 
+             size=2) +
+  labs(x = "PC2", y = "MRSA CFU/10 g") +
+   ggtitle(" ") +
+   theme_bw() + 
+   #coord_cartesian(ylim=c(0, 80000))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+  
+
+MRSA_S_WL_Predict=plot(MRSA_S_WL_predict)+
+  geom_point(data=MRSA_S_mod_data, 
+             aes(x = Water_Level, y = MRSA_S), color = "seagreen", 
+             size=2) +
+  labs(x = "Tidal Height", y = "MRSA CFU/10 g") +
+   ggtitle(" ") +
+   theme_bw() + 
+  # coord_cartesian(ylim=c(0, 500))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+```
+
+
+
+```{r}
+effects_plot_Ent_W=allEffects(mod_Ent_full)
+
+grid.arrange(
+  
+  plot(effects_plot_Ent_W$Comp.1,main="",
+       ylab=my_y_title_ENT,xlab="PCA 1"),
+  
+  plot(effects_plot_Ent_W$Comp.2,main="",
+       ylab=my_y_title_ENT,xlab="PCA 2"),
+
+  plot(effects_plot_Ent_W$Water_Level,main="",
+       ylab=my_y_title_ENT, xlab="Tidal Height"),
+  
+  ncol=3,nrow=1)
+
+```
+
+```{r}
+Ent_W_PC1_predict <- ggpredict(mod_Ent_full, terms = c("Comp.1"))
+Ent_W_PC2_predict <- ggpredict(mod_Ent_full, terms = c("Comp.2"))
+Ent_W_WL_predict <- ggpredict(mod_Ent_full, terms = c("Water_Level"))
+
+Ent_W_PC1_Predict=plot(Ent_W_PC1_predict)+
+  geom_point(data=Ent_W_mod_data, 
+             aes(x = Comp.1, y = Ent_W), color = "cornflowerblue", 
+             size=2) +
+  labs(x = "PC1", y = my_y_title_ENT) +
+   ggtitle(" ") +
+   theme_bw() + 
+# coord_cartesian(ylim=c(0, 300))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+
+
+Ent_W_PC2_Predict=plot(Ent_W_PC2_predict)+
+  geom_point(data=Ent_W_mod_data, 
+             aes(x = Comp.2, y = Ent_W), color = "coral1", 
+             size=2) +
+  labs(x = "PC2", y = my_y_title_ENT) +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 8000))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+  
+
+Ent_W_WL_Predict=plot(Ent_W_WL_predict)+
+  geom_point(data=Ent_W_mod_data, 
+             aes(x = Water_Level, y = Ent_W), color = "seagreen", 
+             size=2) +
+  labs(x = "Tidal Height", y = my_y_title_ENT) +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 2000))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+```
+
+
+```{r}
+effects_plot_Ent_S=allEffects(mod_Ent_S_full)
+
+grid.arrange(
+  
+  plot(effects_plot_Ent_S$Comp.1,main="",
+       ylab=my_y_title_ENT_S,xlab="PCA 1"),
+  
+  plot(effects_plot_Ent_S$Comp.2,main="",
+       ylab=my_y_title_ENT_S,xlab="PCA 2"),
+
+  plot(effects_plot_Ent_S$Water_Level,main="",
+       ylab=my_y_title_ENT_S, xlab="Tidal Height"),
+  
+  ncol=3,nrow=1)
+
+```
+
+```{r}
+Ent_S_PC1_predict <- ggpredict(mod_Ent_S_full, terms = c("Comp.1"))
+Ent_S_PC2_predict <- ggpredict(mod_Ent_S_full, terms = c("Comp.2"))
+Ent_S_WL_predict <- ggpredict(mod_Ent_S_full, terms = c("Water_Level"))
+
+Ent_S_PC1_Predict=plot(Ent_S_PC1_predict)+
+  geom_point(data=Ent_S_mod_data, 
+             aes(x = Comp.1, y = Ent_S), color = "cornflowerblue", 
+             size=2) +
+  labs(x = "PC1", y = my_y_title_ENT_S) +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 21000))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+
+
+Ent_S_PC2_Predict=plot(Ent_S_PC2_predict)+
+  geom_point(data=Ent_S_mod_data, 
+             aes(x = Comp.2, y = Ent_S), color = "coral1", 
+             size=2) +
+  labs(x = "PC2", y = my_y_title_ENT_S) +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 15000))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+  
+
+Ent_S_WL_Predict=plot(Ent_S_WL_predict)+
+  geom_point(data=Ent_S_mod_data, 
+             aes(x = Water_Level, y = Ent_S), color = "seagreen", 
+             size=2) +
+  labs(x = "Tidal Height", y = my_y_title_ENT_S) +
+   ggtitle(" ") +
+   theme_bw() + 
+  # coord_cartesian(ylim=c(0, 500))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+```
+
+
+
+```{r}
+effects_plot_Cperf_W=allEffects(mod_Cperf_full)
+
+grid.arrange(
+  
+  plot(effects_plot_Cperf_W$Comp.1,main="",
+       ylab=my_y_title_CPERF,xlab="PCA 1"),
+  
+  plot(effects_plot_Cperf_W$Comp.2,main="",
+       ylab=my_y_title_CPERF,xlab="PCA 2"),
+  
+  plot(effects_plot_Cperf_W$Water_Level,main="",
+       ylab=my_y_title_CPERF, xlab="Tidal Height"),
+  
+  ncol=3,nrow=1)
+
+```
+
+```{r}
+Cperf_W_PC1_predict <- ggpredict(mod_Cperf_full, terms = c("Comp.1"))
+Cperf_W_PC2_predict <- ggpredict(mod_Cperf_full, terms = c("Comp.2"))
+Cperf_W_WL_predict <- ggpredict(mod_Cperf_full, terms = c("Water_Level"))
+
+Cperf_W_PC1_Predict=plot(Cperf_W_PC1_predict)+
+  geom_point(data=Cperf_W_mod_data, 
+             aes(x = Comp.1, y = Cperf_W), color = "cornflowerblue", 
+             size=2) +
+  labs(x = "PC1", y = my_y_title_CPERF) +
+   ggtitle(" ") +
+   theme_bw() + 
+# coord_cartesian(ylim=c(0, 300))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+
+
+Cperf_W_PC2_Predict=plot(Cperf_W_PC2_predict)+
+  geom_point(data=Cperf_W_mod_data, 
+             aes(x = Comp.2, y = Cperf_W), color = "coral1", 
+             size=2) +
+  labs(x = "PC2", y = my_y_title_CPERF) +
+   ggtitle(" ") +
+   theme_bw() + 
+   #coord_cartesian(ylim=c(0, 8000))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+  
+
+Cperf_W_WL_Predict=plot(Cperf_W_WL_predict)+
+  geom_point(data=Cperf_W_mod_data, 
+             aes(x = Water_Level, y = Cperf_W), color = "seagreen", 
+             size=2) +
+  labs(x = "Tidal Height", y = my_y_title_CPERF) +
+   ggtitle(" ") +
+   theme_bw() + 
+  # coord_cartesian(ylim=c(0, 300))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+```
+
+
+
+```{r}
+effects_plot_Cperf_S=allEffects(mod_Cperf_S_full)
+
+
+grid.arrange(
+  
+  plot(effects_plot_Cperf_S$Comp.1,main="",
+       ylab=my_y_title_CPERF_S,xlab="PCA 1"),
+  
+  plot(effects_plot_Cperf_S$Comp.2,main="",
+       ylab=my_y_title_CPERF_S,xlab="PCA 2"),
+
+  plot(effects_plot_Cperf_S$Water_Level,main="",
+       ylab=my_y_title_CPERF_S, xlab="Tidal Height"),
+
+  ncol=3,nrow=1)
+
+```
+
+```{r}
+Cperf_S_PC1_predict <- ggpredict(mod_Cperf_S_full, terms = c("Comp.1"))
+Cperf_S_PC2_predict <- ggpredict(mod_Cperf_S_full, terms = c("Comp.2"))
+Cperf_S_WL_predict <- ggpredict(mod_Cperf_S_full, terms = c("Water_Level"))
+
+Cperf_S_PC1_Predict=plot(Cperf_S_PC1_predict)+
+  geom_point(data=Cperf_S_mod_data, 
+             aes(x = Comp.1, y = Cperf_S), color = "cornflowerblue", 
+             size=2) +
+  labs(x = "PC1", y = my_y_title_CPERF_S) +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 250))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+
+
+Cperf_S_PC2_Predict=plot(Cperf_S_PC2_predict)+
+  geom_point(data=Cperf_S_mod_data, 
+             aes(x = Comp.2, y = Cperf_S), color = "coral1", 
+             size=2) +
+  labs(x = "PC2", y = my_y_title_CPERF_S) +
+   ggtitle(" ") +
+   theme_bw() + 
+  coord_cartesian(ylim=c(0, 500))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+  
+
+Cperf_S_WL_Predict=plot(Cperf_S_WL_predict)+
+  geom_point(data=Cperf_S_mod_data, 
+             aes(x = Water_Level, y = Cperf_S), color = "seagreen", 
+             size=2) +
+  labs(x = "Tidal Height", y = my_y_title_CPERF_S) +
+   ggtitle(" ") +
+   theme_bw() + 
+   coord_cartesian(ylim=c(0, 500))+ 
+  theme(panel.grid=element_blank(), 
+        legend.position="top", 
+        text=element_text(size=14)) 
+```
+
+
+## Metadata for S. aureus, MRSA, and FIB concentrations in seawater and sand across all sites
+
+#### Subset data
+
+```{r}
+#staph dataset for water and site
+Staph_w_data_site=dat[c("Site", "Staph_W","Location","Location_1")]
+#head(Staph_w_data)
+STAPH_SITE=na.omit(Staph_w_data_site)
+#head(STAPH_SITE)
+
+#staph dataset for sand and site
+Staph_w_data_site_S=dat[c("Site", "Staph_S_","Staph_S_","Location","Location_1")]
+#head(Staph_w_data)
+STAPH_SITE_S=na.omit(Staph_w_data_site_S)
+#head(STAPH_SITE_S)
+
+#mrsa data for plots
+MRSA_w_data_site=dat[c("Site", "MRSA_W","Location","Location_1")]
+MRSA_SITE=na.omit(MRSA_w_data_site)
+#head(MRSA_SITE)
+
+#mrsa sand site for plots
+MRSA_S_data_site=dat[c("Site", "MRSA_S_","MRSA_S","Location","Location_1")]
+MRSA_SITE_S=na.omit(MRSA_S_data_site)
+#head(MRSA_SITE_S)
+
+#Ent data for plots
+Ent_w_data_site=dat[c("Site", "Ent_W","Location","Location_1")]
+ENT_SITE=na.omit(Ent_w_data_site)
+#head(ENT_SITE)
+
+#Ent data for site and sand
+ENT_S_data_site=dat[c("Site", "Ent_S_","Ent_S","Location","Location_1")]
+ENT_SITE_S=na.omit(ENT_S_data_site)
+#head(ENT_SITE_S)
+
+#CPERF data for plots
+Cperf_w_data_site=dat[c("Site", "Cperf_W","Location","Location_1")]
+CPERF_SITE=na.omit(Cperf_w_data_site)
+#head(CPERF_SITE)
+
+#CPERF data for site and sand
+Cperf_S_data_site=dat[c("Site", "Cperf_S_","Cperf_S","Location","Location_1")]
+CPERF_SITE_S=na.omit(Cperf_S_data_site)
+#head(CPERF_SITE_S)
+```
+
+
+#### Mean, Median, SD, Min, Max, and Geometric Mean across all sites
+
+```{r}
+geom_mean = function(x) {
+  exp(mean(log(x[x>0])))
+}
+
+
+staph_meta_data <- ddply(STAPH_SITE, .(Location), summarize, 
+                           avg=mean(Staph_W),
+              Median = median(Staph_W), 
+              SD = sd(Staph_W),
+              gmean=geom_mean(Staph_W),
+              min=min(Staph_W),
+              max=max(Staph_W))
+staph_meta_data
+
+MRSA_meta_data <- ddply(MRSA_SITE, .(Location), summarize, 
+                           avg=mean(MRSA_W),
+              Median = median(MRSA_W), 
+              SD = sd(MRSA_W),
+              gmean=geom_mean(MRSA_W),
+              min=min(MRSA_W),
+              max=max(MRSA_W))
+MRSA_meta_data
+
+ENT_meta_data <- ddply(ENT_SITE, .(Location), summarize, 
+                           avg=mean(Ent_W),
+              Median = median(Ent_W), 
+              SD = sd(Ent_W),
+              gmean=geom_mean(Ent_W),
+              min=min(Ent_W),
+              max=max(Ent_W))
+ENT_meta_data
+
+CPERF_meta_data <- ddply(CPERF_SITE, .(Location), summarize, 
+                           avg=mean(Cperf_W),
+              Median = median(Cperf_W), 
+              SD = sd(Cperf_W),
+              gmean=geom_mean(Cperf_W),
+              min=min(Cperf_W),
+              max=max(Cperf_W))
+CPERF_meta_data
+```
+
+```{r}
+staph_S_meta_data <- ddply(STAPH_SITE_S, .(Location), summarize, 
+                           avg=mean(Staph_S_),
+              Median = median(Staph_S_), 
+              SD = sd(Staph_S_),
+              gmean=geom_mean(Staph_S_),
+              min=min(Staph_S_),
+              max=max(Staph_S_))
+staph_S_meta_data
+
+MRSA_S_meta_data <- ddply(MRSA_SITE_S, .(Location), summarize, 
+                           avg=mean(MRSA_S_),
+              Median = median(MRSA_S_), 
+              SD = sd(MRSA_S_),
+              gmean=geom_mean(MRSA_S_),
+              min=min(MRSA_S_),
+              max=max(MRSA_S_))
+MRSA_S_meta_data
+
+ENT_S_meta_data <- ddply(ENT_SITE_S, .(Location), summarize, 
+                           avg=mean(Ent_S_),
+              Median = median(Ent_S_), 
+              SD = sd(Ent_S_),
+              gmean=geom_mean(Ent_S_),
+              min=min(Ent_S_),
+              max=max(Ent_S_))
+ENT_S_meta_data
+
+CPERF_S_meta_data <- ddply(CPERF_SITE_S, .(Location), summarize, 
+                           avg=mean(Cperf_S_),
+              Median = median(Cperf_S_),
+              SD = sd(Cperf_S_),
+              gmean=geom_mean(Cperf_S_),
+              min=min(Cperf_S_),
+              max=max(Cperf_S_))
+CPERF_S_meta_data
+```
+
+
+#### Staph over time
+
+```{r}
+#dat$Date=as.Date(dat$Date, format='%y/%m/%d')
+
+
+ggplot(dat, aes(x=date,y=Staph_W))+
+  geom_point(aes(color=Location))+
+  ylim(0,4100)+
+  geom_smooth(aes(fill=Location,color=Location))+
+  theme(
+    axis.text.x=element_text(angle=90,vjust=0.5,hjust=1)
+    )
+```
+
+
+
+
